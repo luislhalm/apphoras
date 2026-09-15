@@ -166,13 +166,21 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
   border-left:4px solid var(--linea-fuerte);margin-bottom:14px}
 .planta[data-empresa="FCAP"]{border-left-color:var(--naranja)}
 .planta[data-empresa="TORR"]{border-left-color:var(--purpura)}
-.planta-cab{display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--linea)}
-.planta-cab h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em}
-.bloque-planta{border-bottom:1px solid var(--linea-fuerte)}
-.rotulo-bloque{margin:0;padding:11px 18px 0;font-size:12.5px;color:var(--tinta-suave)}
+.planta-cab{display:flex;align-items:stretch;border-bottom:1px solid var(--linea-fuerte)}
+.planta-ident{display:flex;align-items:center;gap:10px;padding:15px 18px;
+  min-width:200px;flex-shrink:0;border-right:1px solid var(--linea)}
+.planta-cab h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+.rejilla-planta{flex:1;grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
+.rejilla-planta .celda{border-bottom:none;display:flex;flex-direction:column;justify-content:center}
+.rejilla-planta .celda:last-child{border-right:none}
 .linea-cab{background:#FAFAFB}
 .nota-planta{margin:0;padding:10px 18px;font-size:12.5px;color:var(--tinta-suave);border-bottom:1px solid var(--linea)}
 .oculto{display:none !important}
+@media (max-width:760px){
+  .planta-cab{flex-direction:column}
+  .planta-ident{border-right:none;border-bottom:1px solid var(--linea);min-width:0}
+  .rejilla-planta .celda{border-bottom:1px solid var(--linea)}
+}
 @media (max-width:640px){
   .barra-fila,.envoltorio,.pie-fila{padding-left:14px;padding-right:14px}
   .cierre{padding:18px}
@@ -222,6 +230,9 @@ const CFG = {
     { empresa:"FCAP", planta:"5", sub:"",       principal:true },
     { empresa:"TORR", planta:"1", sub:"SACOS",  principal:true }
   ],
+
+  // Orden en que se muestran las líneas dentro de cada almacén
+  ordenLineas : ["SACOS","BOLSAS"],
 
   // Día del mes que se graba en la columna fecha: "ultimo" o "primero"
   diaDelMes : "ultimo",
@@ -303,7 +314,6 @@ const CFG = {
     <div class="pie-nota" id="pieNota"></div>
     <div class="pie-acciones">
       <button class="btn-texto" id="btnCols">Ver columnas</button>
-      <button class="btn-sec" id="btnLinea">Añadir línea</button>
       <button class="btn btn-naranja" id="btnGuardar">Guardar cambios</button>
     </div>
   </div>
@@ -680,7 +690,7 @@ function pintar(){
   if(!lineas.length){
     $("contenido").innerHTML = `<div class="vacio">
       <p>No hay ninguna línea configurada para ${escapar(S.empresa)}.</p>
-      <p>Revisa el catálogo de líneas o usa «Añadir línea».</p></div>`;
+      <p>Revisa el catálogo de líneas en la configuración.</p></div>`;
     $("avanceTexto").textContent = "Sin líneas";
     $("avanceSegmentos").innerHTML = "";
     actualizarPie();
@@ -694,6 +704,12 @@ function pintar(){
     if(!grupos.has(g)) grupos.set(g, []);
     grupos.get(g).push(c);
   }
+  const peso = sub => {
+    const i = (CFG.ordenLineas || []).indexOf(txt(sub).toUpperCase());
+    return i === -1 ? 99 : i;
+  };
+  for(const cs of grupos.values())
+    cs.sort((a,b) => peso(a.sub) - peso(b.sub) || txt(a.sub).localeCompare(txt(b.sub)));
   const ordenadas = [...grupos.entries()].sort((a,b) =>
     (Number(a[0]) - Number(b[0])) || String(a[0]).localeCompare(String(b[0])));
 
@@ -705,16 +721,12 @@ function pintar(){
 
     html += `<section class="planta" data-empresa="${escapar(S.empresa)}">
       <div class="planta-cab">
-        <h2>Planta ${escapar(planta)}</h2>
-        <span class="etq ${etqEmp}">${escapar(S.empresa)}</span>
+        <div class="planta-ident">
+          <h2>Planta ${escapar(planta)}</h2>
+          <span class="etq ${etqEmp}">${escapar(S.empresa)}</span>
+        </div>
+        ${dePlanta.length ? `<div class="rejilla rejilla-planta">${celdasDe(jefe, dePlanta)}</div>` : ""}
       </div>`;
-
-    if(dePlanta.length){
-      html += `<div class="bloque-planta">
-        <p class="rotulo-bloque">Personal del almacén</p>
-        <div class="rejilla">${celdasDe(jefe, dePlanta)}</div>
-      </div>`;
-    }
 
     for(const c of cs){
       if(itemDe(c)) guardadas++;
@@ -815,18 +827,6 @@ async function guardar(){
   else if(hechas)   aviso(`${hechas} línea${hechas>1?"s":""} guardada${hechas>1?"s":""} en ${nombreMes(S.mes)}.`, "bien");
 }
 
-/* ============ añadir línea ============ */
-function anadirLinea(){
-  const planta = prompt("Número de planta (id_planta):");
-  if(planta === null || planta.trim() === "") return;
-  const sub = prompt("Línea o sublínea (subid_planta). Déjalo vacío si no aplica:", "") || "";
-  const c = {planta: planta.trim(), sub: sub.trim(), empresa: S.empresa};
-  const existe = [...S.combos, ...S.extra].some(x => clave(x) === clave(c));
-  if(existe){ aviso("Esa línea ya está en el listado.", "info"); return; }
-  S.extra.push(c);
-  pintar();
-}
-
 /* ============ cambios de mes / empresa ============ */
 function cambiarMes(){
   const v = $("selMes").value;
@@ -904,7 +904,6 @@ $("selEmpresa").addEventListener("change", () => {
   S.empresa = $("selEmpresa").value; limpiarAvisos(); pintar();
 });
 $("btnGuardar").addEventListener("click", guardar);
-$("btnLinea").addEventListener("click", anadirLinea);
 $("btnCols").addEventListener("click", verColumnas);
 window.addEventListener("beforeunload", e => {
   if(Object.keys(S.tocado).some(k => Object.keys(S.tocado[k]).length)){
