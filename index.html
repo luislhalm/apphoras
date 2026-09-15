@@ -162,6 +162,7 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .vacio{padding:52px 22px;text-align:center;color:var(--tinta-suave);background:var(--superficie);border:1px solid var(--linea)}
 .cargando{padding:52px 22px;text-align:center;color:var(--tinta-suave)}
 
+.nota-planta{margin:0;padding:10px 18px;font-size:12.5px;color:var(--tinta-suave);border-bottom:1px solid var(--linea)}
 .oculto{display:none !important}
 @media (max-width:640px){
   .barra-fila,.envoltorio,.pie-fila{padding-left:14px;padding-right:14px}
@@ -203,11 +204,14 @@ const CFG = {
 
   // Líneas que hay que rellenar todos los meses. Al ser fijas, se declaran aquí
   // y no dependen de que existan datos previos. Corrige o amplía la lista.
+  // "principal" marca la línea donde se registran los campos de planta
+  // (trabajadores, bajas, ausencias): una sola por almacén y empresa.
   lineas : [
     { empresa:"FCAP", planta:"1", sub:"BOLSAS" },
-    { empresa:"FCAP", planta:"1", sub:"SACOS"  },
-    { empresa:"FCAP", planta:"2", sub:"SACOS"  },
-    { empresa:"TORR", planta:"1", sub:"SACOS"  }
+    { empresa:"FCAP", planta:"1", sub:"SACOS",  principal:true },
+    { empresa:"FCAP", planta:"2", sub:"SACOS",  principal:true },
+    { empresa:"FCAP", planta:"5", sub:"",       principal:true },
+    { empresa:"TORR", planta:"1", sub:"SACOS",  principal:true }
   ],
 
   // Día del mes que se graba en la columna fecha: "ultimo" o "primero"
@@ -221,9 +225,9 @@ const CFG = {
     { col:"nhorastotales",  etiqueta:"Nº horas totales del mes" },
     { col:"horas_actividad",etiqueta:"Nº horas de actividad" },
     { col:"tn_noconformes", etiqueta:"Tn no conformes" },
-    { col:"num_trab_produc",etiqueta:"Nº trabajadores producción" },
-    { col:"num_bajas",      etiqueta:"Nº bajas del mes" },
-    { col:"num_ausencias",  etiqueta:"Nº ausencias" }
+    { col:"num_trab_produc",etiqueta:"Nº trabajadores producción", porPlanta:true },
+    { col:"num_bajas",      etiqueta:"Nº bajas del mes",            porPlanta:true },
+    { col:"num_ausencias",  etiqueta:"Nº ausencias",                porPlanta:true }
   ],
 
   // Columnas de sistema que nunca son campos del formulario
@@ -583,7 +587,8 @@ async function cargarItems(){
   // Catálogo fijo primero; después, cualquier combinación histórica que no esté
   const vistos = new Map();
   for(const c of (CFG.lineas || [])){
-    const n = { planta:txt(c.planta), sub:txt(c.sub), empresa:txt(c.empresa) };
+    const n = { planta:txt(c.planta), sub:txt(c.sub), empresa:txt(c.empresa),
+                principal: !!c.principal };
     vistos.set(clave(n), n);
   }
   for(const it of todos){
@@ -625,7 +630,14 @@ function itemDe(combo){
   });
 }
 
+function principalDe(c){
+  const p = S.combos.find(x => x.principal && txt(x.planta)===txt(c.planta)
+                            && txt(x.empresa)===txt(c.empresa));
+  return p ? (p.sub || `planta ${p.planta}`) : null;
+}
+
 function pintar(){
+  const hayPorPlanta = S.campos.some(f => f.porPlanta);
   $("mesNombre").textContent = nombreMes(S.mes);
   const lineas = lineasVisibles();
 
@@ -647,7 +659,8 @@ function pintar(){
     const f = it ? it.fields : {};
     if(it) guardadas++;
 
-    const celdas = S.campos.map(campo => {
+    const visibles = S.campos.filter(campo => !campo.porPlanta || c.principal);
+    const celdas = visibles.map(campo => {
       const pend = S.tocado[k] && Object.prototype.hasOwnProperty.call(S.tocado[k], campo.nombre);
       const valor = pend ? S.tocado[k][campo.nombre] : mostrar(f[campo.nombre]);
       return `<div class="celda">
@@ -670,6 +683,9 @@ function pintar(){
         <span class="estado ${est[0]}" data-estado="${escapar(k)}"><i class="punto"></i>${est[1]}</span>
       </div>
       <div class="rejilla">${celdas}</div>
+      ${!c.principal && hayPorPlanta ? `<p class="nota-planta">Trabajadores, bajas y ausencias
+        se registran una sola vez por almacén, en la línea
+        ${escapar(principalDe(c) || "principal")}.</p>` : ""}
     </section>`;
   }
   $("contenido").innerHTML = html;
@@ -808,7 +824,8 @@ async function arrancar(){
     try{
       await cargarItems();
     }catch(e){
-      S.combos = (CFG.lineas || []).map(c => ({planta:txt(c.planta), sub:txt(c.sub), empresa:txt(c.empresa)}));
+      S.combos = (CFG.lineas || []).map(c => ({planta:txt(c.planta), sub:txt(c.sub),
+                                               empresa:txt(c.empresa), principal:!!c.principal}));
       aviso("No se han podido leer los datos existentes, pero puedes registrar el mes. " + e.message, "mal");
     }
     if(!S.campos.length){
