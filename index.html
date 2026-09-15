@@ -543,7 +543,8 @@ async function resolverLista(){
     for(const f of CFG.campos){
       const n = buscar(f.col);
       if(!n){ S.camposNoHallados.push(f.col); continue; }
-      S.campos.push({ nombre:n, etiqueta:f.etiqueta || f.col, numerico:tipoDe(n) });
+      S.campos.push({ nombre:n, etiqueta:f.etiqueta || f.col, numerico:tipoDe(n),
+                      porPlanta: !!f.porPlanta });
     }
   }else{
     S.campos = S.cols.filter(c => !esSistema(c) && !reservadas.includes(c.name))
