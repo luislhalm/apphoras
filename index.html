@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cierre industrial · CAPA</title>
-<script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
 <style>
 :root{
   --naranja:#F08900;
@@ -355,8 +354,47 @@ function aviso(texto, tipo){
 }
 function limpiarAvisos(){ $("avisos").innerHTML = ""; }
 
+/* ============ carga de MSAL ============ */
+const CDNS = [
+  "https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js",
+  "https://cdn.jsdelivr.net/npm/@azure/msal-browser@2.38.3/lib/msal-browser.min.js",
+  "https://unpkg.com/@azure/msal-browser@2.38.3/lib/msal-browser.min.js"
+];
+function inyectar(url){
+  return new Promise((ok,mal)=>{
+    const t=document.createElement("script");
+    t.src=url; t.async=true;
+    t.onload =()=> (typeof msal!=="undefined") ? ok(url) : mal(new Error("cargado pero vacío"));
+    t.onerror=()=> mal(new Error("no accesible"));
+    document.head.appendChild(t);
+  });
+}
+async function cargarMsal(){
+  if(typeof msal!=="undefined") return;
+  const errores=[];
+  for(const url of CDNS){
+    try{ await inyectar(url); return; }
+    catch(e){ errores.push(`${new URL(url).hostname}: ${e.message}`); }
+  }
+  throw new Error("No se ha podido cargar la librería de inicio de sesión de Microsoft desde ningún origen. "
+    + errores.join(" · ")
+    + ". Si estás en la red corporativa, pide que se permita alcdn.msauth.net.");
+}
+
+/* ============ entorno ============ */
+function entornoNoValido(){
+  if(location.protocol==="file:")
+    return "Estás abriendo el archivo directamente desde el disco (file://). "
+         + "El inicio de sesión de Microsoft necesita una dirección web publicada.";
+  if(window.self!==window.top || location.origin==="null")
+    return "La página se está mostrando dentro de una vista previa aislada. "
+         + "Publica el archivo en SharePoint o en un servidor web y ábrelo en su propia pestaña.";
+  return null;
+}
+
 /* ============ autenticación ============ */
 async function iniciarMsal(){
+  await cargarMsal();
   S.msal = new msal.PublicClientApplication({
     auth:{
       clientId: CFG.clientId,
@@ -714,14 +752,28 @@ async function arrancar(){
 
 /* ============ eventos ============ */
 $("btnEntrar").addEventListener("click", async () => {
+  const err = $("errorLogin");
+  err.classList.add("oculto");
+  $("btnEntrar").disabled = true;
+  $("btnEntrar").textContent = "Conectando…";
   try{
+    if(!S.msal) await iniciarMsal();
     const r = await S.msal.loginPopup({scopes:AMBITOS});
     S.msal.setActiveAccount(r.account);
     S.cuenta = r.account;
     arrancar();
   }catch(e){
-    $("errorLogin").textContent = "No se ha podido iniciar sesión. " + e.message;
-    $("errorLogin").classList.remove("oculto");
+    let m = e.message || String(e);
+    if(/popup_window_error|popup.*block/i.test(m))
+      m = "El navegador ha bloqueado la ventana emergente. Permite las ventanas emergentes para este sitio.";
+    if(/redirect_uri|AADSTS50011/i.test(m))
+      m = "La dirección de esta página no está dada de alta como Redirect URI de tipo SPA en el registro de Azure AD. "
+        + "Añade exactamente: " + location.origin + location.pathname;
+    err.textContent = m;
+    err.classList.remove("oculto");
+  }finally{
+    $("btnEntrar").disabled = false;
+    $("btnEntrar").textContent = "Entrar con Microsoft";
   }
 });
 $("btnSalir").addEventListener("click", () => S.msal.logoutPopup());
@@ -739,11 +791,17 @@ window.addEventListener("beforeunload", e => {
 });
 
 (async function(){
+  const problema = entornoNoValido();
+  if(problema){
+    $("errorLogin").textContent = problema;
+    $("errorLogin").classList.remove("oculto");
+    return;
+  }
   try{
     const cuenta = await iniciarMsal();
     if(cuenta){ S.cuenta = cuenta; arrancar(); }
   }catch(e){
-    $("errorLogin").textContent = "Error al inicializar la autenticación. " + e.message;
+    $("errorLogin").textContent = e.message || String(e);
     $("errorLogin").classList.remove("oculto");
   }
 })();
