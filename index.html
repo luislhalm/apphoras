@@ -201,22 +201,35 @@ const CFG = {
   // Empresas disponibles en el desplegable
   empresas : ["FCAP","TORR"],
 
+  // Líneas que hay que rellenar todos los meses. Al ser fijas, se declaran aquí
+  // y no dependen de que existan datos previos. Corrige o amplía la lista.
+  lineas : [
+    { empresa:"FCAP", planta:"1", sub:"BOLSAS" },
+    { empresa:"FCAP", planta:"1", sub:"SACOS"  },
+    { empresa:"FCAP", planta:"2", sub:"SACOS"  },
+    { empresa:"TORR", planta:"1", sub:"SACOS"  }
+  ],
+
   // Día del mes que se graba en la columna fecha: "ultimo" o "primero"
   diaDelMes : "ultimo",
 
-  // Columnas que NO deben aparecer como campos del formulario
-  excluir : ["ID","Modified","Created","Author","Editor","Attachments","ContentType","LinkTitle"],
+  // Campos del formulario, en el orden en que se muestran.
+  // "col" es el nombre VISIBLE de la columna (admite prefijo si está truncado).
+  // Si dejas la lista vacía, la app los descubre sola.
+  campos : [
+    { col:"nhorasextras",   etiqueta:"Nº horas extras" },
+    { col:"nhorastotales",  etiqueta:"Nº horas totales del mes" },
+    { col:"horas_actividad",etiqueta:"Nº horas de actividad" },
+    { col:"tn_noconformes", etiqueta:"Tn no conformes" },
+    { col:"num_trab_produc",etiqueta:"Nº trabajadores producción" },
+    { col:"num_bajas",      etiqueta:"Nº bajas del mes" },
+    { col:"num_ausencias",  etiqueta:"Nº ausencias" }
+  ],
 
-  // Etiquetas más legibles (opcional). Clave = nombre VISIBLE de la columna
-  etiquetas : {
-    nhorasextras_mes  : "Horas extras",
-    nhorastotales_mes : "Horas totales",
-    tn_noconformes    : "Tn no conformes",
-    horas_actividad   : "Horas de actividad",
-    num_trab_produc   : "Trabajadores producción",
-    num_bajas         : "Bajas",
-    num_ausencias     : "Ausencias"
-  }
+  // Columnas de sistema que nunca son campos del formulario
+  excluir : ["ID","Title","Modified","Created","Author","Editor","Attachments","ContentType",
+             "Edit","LinkTitle","LinkTitleNoMenu","DocIcon","ItemChildCount","FolderChildCount",
+             "AppAuthor","AppEditor","ComplianceAssetId","_UIVersionString"]
 };
 </script>
 
@@ -239,6 +252,7 @@ const CFG = {
   <h1>Cierre industrial</h1>
   <p>Registro mensual de datos de producción por planta y empresa. Accede con tu cuenta corporativa.</p>
   <button class="btn" id="btnEntrar">Entrar con Microsoft</button>
+  <div id="esperando" class="oculto" style="color:var(--tinta-suave);font-size:14px">Comprobando la sesión…</div>
   <div id="errorLogin" class="aviso mal oculto" style="margin-top:20px"></div>
 </div>
 
@@ -345,6 +359,7 @@ function mostrar(v){
   if(v===null || v===undefined || v==="") return "";
   return typeof v === "number" ? String(v).replace(".", ",") : String(v);
 }
+function txt(v){ return (v===null||v===undefined) ? "" : String(v).trim(); }
 function clave(c){ return `${c.planta}||${c.sub}||${c.empresa}`; }
 function escapar(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
@@ -399,13 +414,20 @@ async function iniciarMsal(){
     auth:{
       clientId: CFG.clientId,
       authority: `https://login.microsoftonline.com/${CFG.tenantId}`,
-      redirectUri: window.location.origin + window.location.pathname
+      redirectUri: window.location.origin + window.location.pathname,
+      postLogoutRedirectUri: window.location.origin + window.location.pathname,
+      navigateToLoginRequestUrl: true
     },
     cache:{ cacheLocation:"sessionStorage", storeAuthStateInCookie:false }
   });
   if(typeof S.msal.initialize === "function") await S.msal.initialize();
+
+  // Vuelta desde login.microsoftonline.com tras el redirect
   const res = await S.msal.handleRedirectPromise();
-  if(res && res.account) S.msal.setActiveAccount(res.account);
+  if(res && res.account){
+    S.msal.setActiveAccount(res.account);
+    return res.account;
+  }
   const cuentas = S.msal.getAllAccounts();
   if(cuentas.length){ S.msal.setActiveAccount(cuentas[0]); return cuentas[0]; }
   return null;
@@ -418,8 +440,9 @@ async function conseguirToken(){
     const r = await S.msal.acquireTokenSilent({scopes:AMBITOS, account:cuenta});
     return r.accessToken;
   }catch(e){
-    const r = await S.msal.acquireTokenPopup({scopes:AMBITOS});
-    return r.accessToken;
+    // La sesión ha caducado: se renueva en la misma pestaña
+    await S.msal.acquireTokenRedirect({scopes:AMBITOS, account:cuenta});
+    throw new Error("Renovando la sesión…");
   }
 }
 
@@ -455,15 +478,22 @@ async function resolverLista(){
   const cols = await graph(`/sites/${S.siteId}/lists/${S.listId}/columns`);
   S.cols = cols.value;
 
-  // Los nombres internos que genera SharePoint al importar un CSV son field_1,
-  // field_5, Title... mientras que el visible conserva el encabezado original.
-  // Aquí traducimos lo que pone en CFG (visible) al interno que exige Graph.
+  const esSistema = c =>
+    c.hidden || c.readOnly || c.name.startsWith("_") ||
+    CFG.excluir.includes(c.name) || CFG.excluir.includes(c.displayName) ||
+    (c.columnGroup || "").indexOf("_Hidden") === 0;
+
+  // Traduce nombre visible -> nombre interno. Acepta coincidencia exacta y,
+  // si no la hay, por prefijo (los encabezados salen truncados en la vista).
   const buscar = etiqueta => {
     if(!etiqueta) return null;
     const e = String(etiqueta).trim().toLowerCase();
-    const c = S.cols.find(x => (x.displayName||"").trim().toLowerCase() === e)
-           || S.cols.find(x => (x.name||"").trim().toLowerCase() === e);
-    return c ? c.name : null;
+    const norm = x => String(x||"").trim().toLowerCase();
+    return (S.cols.find(c => norm(c.displayName) === e)
+         || S.cols.find(c => norm(c.name) === e)
+         || S.cols.find(c => norm(c.displayName).startsWith(e))
+         || S.cols.find(c => norm(c.name).startsWith(e))
+         || {}).name || null;
   };
 
   S.col = {
@@ -476,35 +506,67 @@ async function resolverLista(){
 
   const faltan = ["fecha","planta","empresa"].filter(k => !S.col[k]);
   if(faltan.length){
-    const disponibles = S.cols.filter(c => !c.hidden)
+    const disp = S.cols.filter(c => !esSistema(c))
       .map(c => `${c.displayName} → ${c.name}`).join(", ");
-    throw new Error(`No encuentro las columnas ${faltan.join(", ")} en la lista. `
-      + `Columnas disponibles: ${disponibles}`);
+    throw new Error(`No encuentro las columnas ${faltan.join(", ")}. Columnas de datos: ${disp}`);
   }
 
   const reservadas = Object.values(S.col).filter(Boolean);
-  S.campos = S.cols
-    .filter(c => !c.hidden && !c.readOnly && !c.name.startsWith("_")
-              && !CFG.excluir.includes(c.name)
-              && !CFG.excluir.includes(c.displayName)
-              && !reservadas.includes(c.name))
-    .map(c => ({
-      nombre  : c.name,
-      etiqueta: CFG.etiquetas[c.displayName] || CFG.etiquetas[c.name] || c.displayName || c.name,
-      numerico: !!c.number
-    }));
+  const tipoDe = n => { const c = S.cols.find(x => x.name === n); return c && !!c.number; };
+
+  if(CFG.campos && CFG.campos.length){
+    S.campos = [];
+    S.camposNoHallados = [];
+    for(const f of CFG.campos){
+      const n = buscar(f.col);
+      if(!n){ S.camposNoHallados.push(f.col); continue; }
+      S.campos.push({ nombre:n, etiqueta:f.etiqueta || f.col, numerico:tipoDe(n) });
+    }
+  }else{
+    S.campos = S.cols.filter(c => !esSistema(c) && !reservadas.includes(c.name))
+      .map(c => ({ nombre:c.name, etiqueta:c.displayName||c.name, numerico:!!c.number }));
+    S.camposNoHallados = [];
+  }
 }
 
-// Diagnóstico: equivalencia entre nombre visible y nombre interno
+// Diagnóstico
 function verColumnas(){
-  const filas = S.cols.filter(c => !c.hidden)
-    .map(c => `<tr><td style="padding:3px 14px 3px 0">${escapar(c.displayName||"")}</td>`
-            + `<td style="padding:3px 0;font-weight:600">${escapar(c.name)}</td></tr>`).join("");
-  $("avisos").innerHTML = `<div class="aviso info">
-    <strong>Columnas de la lista</strong>
-    <table style="margin-top:8px;border-collapse:collapse;font-size:13px">
-      <tr><th style="text-align:left;padding-right:14px">Nombre visible</th>
-          <th style="text-align:left">Nombre interno</th></tr>${filas}</table></div>`;
+  const fila = (a,b) => `<tr><td style="padding:2px 14px 2px 0">${escapar(a)}</td>`
+                      + `<td style="padding:2px 0;font-weight:600">${escapar(b)}</td></tr>`;
+  const datos = S.cols.filter(c => !c.hidden && !c.readOnly && !c.name.startsWith("_")
+                                && !CFG.excluir.includes(c.name));
+
+  const emp = [...new Set(S.items.map(i => JSON.stringify((i.fields||{})[S.col.empresa])))];
+  const pla = [...new Set(S.items.map(i => JSON.stringify((i.fields||{})[S.col.planta])))];
+  const sub = S.col.sub ? [...new Set(S.items.map(i => JSON.stringify((i.fields||{})[S.col.sub])))] : ["(sin columna)"];
+  const mes = [...new Set(S.items.map(i => mesDeFecha((i.fields||{})[S.col.fecha])))].filter(Boolean).sort();
+  const ej  = S.items.length ? JSON.stringify(S.items[0].fields, null, 1) : "(no hay elementos)";
+
+  $("avisos").innerHTML = `<div class="aviso info" style="max-height:60vh;overflow:auto">
+    <strong>Diagnóstico</strong>
+    <p style="margin:8px 0">Elementos leídos: <strong>${S.items.length}</strong>
+       · Líneas detectadas: <strong>${S.combos.length}</strong></p>
+    <table style="border-collapse:collapse;font-size:13px;margin-bottom:10px">
+      ${fila("fecha",   S.col.fecha   || "NO ENCONTRADA")}
+      ${fila("planta",  S.col.planta  || "NO ENCONTRADA")}
+      ${fila("sublínea",S.col.sub     || "no usada")}
+      ${fila("empresa", S.col.empresa || "NO ENCONTRADA")}
+      ${fila("id",      S.col.id      || "no usada")}
+    </table>
+    <p style="margin:6px 0"><strong>Valores de empresa:</strong> ${escapar(emp.join(" · ")) || "—"}</p>
+    <p style="margin:6px 0"><strong>Valores de planta:</strong> ${escapar(pla.join(" · ")) || "—"}</p>
+    <p style="margin:6px 0"><strong>Valores de sublínea:</strong> ${escapar(sub.join(" · ")) || "—"}</p>
+    <p style="margin:6px 0"><strong>Meses con datos:</strong> ${escapar(mes.join(", ")) || "—"}</p>
+    ${S.camposNoHallados && S.camposNoHallados.length
+      ? `<p style="margin:6px 0;color:#9C0721"><strong>Campos no encontrados:</strong> ${escapar(S.camposNoHallados.join(", "))}</p>` : ""}
+    <p style="margin:10px 0 4px"><strong>Campos del formulario:</strong>
+       ${escapar(S.campos.map(c => c.etiqueta + " → " + c.nombre).join(" · ")) || "—"}</p>
+    <p style="margin:10px 0 4px"><strong>Columnas de datos de la lista:</strong></p>
+    <table style="border-collapse:collapse;font-size:13px">
+      ${datos.map(c => fila(c.displayName||"", c.name)).join("")}</table>
+    <p style="margin:10px 0 4px"><strong>Primer elemento en bruto:</strong></p>
+    <pre style="font-size:11.5px;white-space:pre-wrap;margin:0">${escapar(ej)}</pre>
+  </div>`;
   window.scrollTo({top:0, behavior:"smooth"});
 }
 
@@ -518,21 +580,25 @@ async function cargarItems(){
   }
   S.items = todos;
 
-  // Combinaciones planta / sublínea / empresa a partir del histórico
+  // Catálogo fijo primero; después, cualquier combinación histórica que no esté
   const vistos = new Map();
+  for(const c of (CFG.lineas || [])){
+    const n = { planta:txt(c.planta), sub:txt(c.sub), empresa:txt(c.empresa) };
+    vistos.set(clave(n), n);
+  }
   for(const it of todos){
     const f = it.fields || {};
     const c = {
-      planta : f[S.col.planta],
-      sub    : f[S.col.sub] || "",
-      empresa: f[S.col.empresa] || ""
+      planta : txt(f[S.col.planta]),
+      sub    : S.col.sub ? txt(f[S.col.sub]) : "",
+      empresa: txt(f[S.col.empresa])
     };
     if(c.planta === undefined || c.planta === null) continue;
     vistos.set(clave(c), c);
   }
   S.combos = [...vistos.values()].sort((a,b) =>
     String(a.empresa).localeCompare(String(b.empresa)) ||
-    Number(a.planta) - Number(b.planta) ||
+    (Number(a.planta) - Number(b.planta)) ||
     String(a.sub).localeCompare(String(b.sub)));
 }
 
@@ -547,15 +613,15 @@ function siguienteId(){
 
 /* ============ pintado ============ */
 function lineasVisibles(){
-  return [...S.combos, ...S.extra].filter(c => c.empresa === S.empresa);
+  return [...S.combos, ...S.extra].filter(c => txt(c.empresa) === txt(S.empresa));
 }
 function itemDe(combo){
   return S.items.find(it => {
     const f = it.fields || {};
     return mesDeFecha(f[S.col.fecha]) === S.mes
-      && String(f[S.col.planta]) === String(combo.planta)
-      && String(f[S.col.sub] || "") === String(combo.sub || "")
-      && String(f[S.col.empresa] || "") === String(combo.empresa || "");
+      && txt(f[S.col.planta]) === txt(combo.planta)
+      && (!S.col.sub || txt(f[S.col.sub]) === txt(combo.sub))
+      && txt(f[S.col.empresa]) === txt(combo.empresa);
   });
 }
 
@@ -739,7 +805,12 @@ async function arrancar(){
 
   try{
     await resolverLista();
-    await cargarItems();
+    try{
+      await cargarItems();
+    }catch(e){
+      S.combos = (CFG.lineas || []).map(c => ({planta:txt(c.planta), sub:txt(c.sub), empresa:txt(c.empresa)}));
+      aviso("No se han podido leer los datos existentes, pero puedes registrar el mes. " + e.message, "mal");
+    }
     if(!S.campos.length){
       aviso("La lista no tiene columnas editables que mostrar. Revisa el bloque CFG.excluir.", "mal");
     }
@@ -755,28 +826,24 @@ $("btnEntrar").addEventListener("click", async () => {
   const err = $("errorLogin");
   err.classList.add("oculto");
   $("btnEntrar").disabled = true;
-  $("btnEntrar").textContent = "Conectando…";
+  $("btnEntrar").textContent = "Redirigiendo…";
   try{
     if(!S.msal) await iniciarMsal();
-    const r = await S.msal.loginPopup({scopes:AMBITOS});
-    S.msal.setActiveAccount(r.account);
-    S.cuenta = r.account;
-    arrancar();
+    await S.msal.loginRedirect({scopes:AMBITOS});   // no vuelve: navega fuera
   }catch(e){
     let m = e.message || String(e);
-    if(/popup_window_error|popup.*block/i.test(m))
-      m = "El navegador ha bloqueado la ventana emergente. Permite las ventanas emergentes para este sitio.";
     if(/redirect_uri|AADSTS50011/i.test(m))
       m = "La dirección de esta página no está dada de alta como Redirect URI de tipo SPA en el registro de Azure AD. "
         + "Añade exactamente: " + location.origin + location.pathname;
     err.textContent = m;
     err.classList.remove("oculto");
-  }finally{
     $("btnEntrar").disabled = false;
     $("btnEntrar").textContent = "Entrar con Microsoft";
   }
 });
-$("btnSalir").addEventListener("click", () => S.msal.logoutPopup());
+$("btnSalir").addEventListener("click", () => S.msal.logoutRedirect({
+  postLogoutRedirectUri: location.origin + location.pathname
+}));
 $("selMes").addEventListener("change", cambiarMes);
 $("selEmpresa").addEventListener("change", () => {
   S.empresa = $("selEmpresa").value; limpiarAvisos(); pintar();
@@ -797,10 +864,16 @@ window.addEventListener("beforeunload", e => {
     $("errorLogin").classList.remove("oculto");
     return;
   }
+  $("btnEntrar").classList.add("oculto");
+  $("esperando").classList.remove("oculto");
   try{
     const cuenta = await iniciarMsal();
+    $("esperando").classList.add("oculto");
+    $("btnEntrar").classList.remove("oculto");
     if(cuenta){ S.cuenta = cuenta; arrancar(); }
   }catch(e){
+    $("esperando").classList.add("oculto");
+    $("btnEntrar").classList.remove("oculto");
     $("errorLogin").textContent = e.message || String(e);
     $("errorLogin").classList.remove("oculto");
   }
