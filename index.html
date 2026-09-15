@@ -162,6 +162,15 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .vacio{padding:52px 22px;text-align:center;color:var(--tinta-suave);background:var(--superficie);border:1px solid var(--linea)}
 .cargando{padding:52px 22px;text-align:center;color:var(--tinta-suave)}
 
+.planta{background:var(--superficie);border:1px solid var(--linea);
+  border-left:4px solid var(--linea-fuerte);margin-bottom:14px}
+.planta[data-empresa="FCAP"]{border-left-color:var(--naranja)}
+.planta[data-empresa="TORR"]{border-left-color:var(--purpura)}
+.planta-cab{display:flex;align-items:center;gap:12px;padding:15px 18px;border-bottom:1px solid var(--linea)}
+.planta-cab h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em}
+.bloque-planta{border-bottom:1px solid var(--linea-fuerte)}
+.rotulo-bloque{margin:0;padding:11px 18px 0;font-size:12.5px;color:var(--tinta-suave)}
+.linea-cab{background:#FAFAFB}
 .nota-planta{margin:0;padding:10px 18px;font-size:12.5px;color:var(--tinta-suave);border-bottom:1px solid var(--linea)}
 .oculto{display:none !important}
 @media (max-width:640px){
@@ -598,8 +607,8 @@ async function cargarItems(){
       sub    : S.col.sub ? txt(f[S.col.sub]) : "",
       empresa: txt(f[S.col.empresa])
     };
-    if(c.planta === undefined || c.planta === null) continue;
-    vistos.set(clave(c), c);
+    if(c.planta === "" ) continue;
+    if(!vistos.has(clave(c))) vistos.set(clave(c), c);
   }
   S.combos = [...vistos.values()].sort((a,b) =>
     String(a.empresa).localeCompare(String(b.empresa)) ||
@@ -636,57 +645,86 @@ function principalDe(c){
   return p ? (p.sub || `planta ${p.planta}`) : null;
 }
 
+function celdasDe(combo, campos){
+  const k = clave(combo);
+  const it = itemDe(combo);
+  const f = it ? it.fields : {};
+  return campos.map(campo => {
+    const pend = S.tocado[k] && Object.prototype.hasOwnProperty.call(S.tocado[k], campo.nombre);
+    const valor = pend ? S.tocado[k][campo.nombre] : mostrar(f[campo.nombre]);
+    return `<div class="celda">
+      <label for="c_${escapar(k)}_${campo.nombre}">${escapar(campo.etiqueta)}</label>
+      <input id="c_${escapar(k)}_${campo.nombre}" type="text" inputmode="decimal"
+             class="${pend ? "tocado" : ""}"
+             data-linea="${escapar(k)}" data-campo="${campo.nombre}"
+             value="${escapar(valor)}" autocomplete="off">
+    </div>`;
+  }).join("");
+}
+
+function marcaEstado(combo){
+  const k = clave(combo);
+  const hayCambios = S.tocado[k] && Object.keys(S.tocado[k]).length;
+  const e = hayCambios ? ["pendiente","Sin guardar"]
+          : itemDe(combo) ? ["guardado","Guardado"] : ["pendiente","Sin datos"];
+  return `<span class="estado ${e[0]}" data-estado="${escapar(k)}"><i class="punto"></i>${e[1]}</span>`;
+}
+
 function pintar(){
-  const hayPorPlanta = S.campos.some(f => f.porPlanta);
   $("mesNombre").textContent = nombreMes(S.mes);
-  const lineas = lineasVisibles();
+
+  const dePlanta = S.campos.filter(f =>  f.porPlanta);
+  const deLinea  = S.campos.filter(f => !f.porPlanta);
+  const lineas   = lineasVisibles();
 
   if(!lineas.length){
     $("contenido").innerHTML = `<div class="vacio">
-      <p>No hay ninguna línea registrada para ${escapar(S.empresa)}.</p>
-      <p>Usa «Añadir línea» para crear la primera.</p></div>`;
+      <p>No hay ninguna línea configurada para ${escapar(S.empresa)}.</p>
+      <p>Revisa el catálogo de líneas o usa «Añadir línea».</p></div>`;
     $("avanceTexto").textContent = "Sin líneas";
     $("avanceSegmentos").innerHTML = "";
     actualizarPie();
     return;
   }
 
-  let html = "";
-  let guardadas = 0;
+  // agrupar por almacén
+  const grupos = new Map();
   for(const c of lineas){
-    const k = clave(c);
-    const it = itemDe(c);
-    const f = it ? it.fields : {};
-    if(it) guardadas++;
+    const g = txt(c.planta);
+    if(!grupos.has(g)) grupos.set(g, []);
+    grupos.get(g).push(c);
+  }
+  const ordenadas = [...grupos.entries()].sort((a,b) =>
+    (Number(a[0]) - Number(b[0])) || String(a[0]).localeCompare(String(b[0])));
 
-    const visibles = S.campos.filter(campo => !campo.porPlanta || c.principal);
-    const celdas = visibles.map(campo => {
-      const pend = S.tocado[k] && Object.prototype.hasOwnProperty.call(S.tocado[k], campo.nombre);
-      const valor = pend ? S.tocado[k][campo.nombre] : mostrar(f[campo.nombre]);
-      return `<div class="celda">
-        <label for="c_${escapar(k)}_${campo.nombre}">${escapar(campo.etiqueta)}</label>
-        <input id="c_${escapar(k)}_${campo.nombre}" type="text" inputmode="decimal"
-               class="${pend ? "tocado" : ""}"
-               data-linea="${escapar(k)}" data-campo="${campo.nombre}"
-               value="${escapar(valor)}" autocomplete="off">
+  let html = "", guardadas = 0;
+  const etqEmp = S.empresa === "FCAP" ? "fcap" : "torr";
+
+  for(const [planta, cs] of ordenadas){
+    const jefe = cs.find(x => x.principal) || cs[0];
+
+    html += `<section class="planta" data-empresa="${escapar(S.empresa)}">
+      <div class="planta-cab">
+        <h2>Planta ${escapar(planta)}</h2>
+        <span class="etq ${etqEmp}">${escapar(S.empresa)}</span>
       </div>`;
-    }).join("");
 
-    const hayCambios = S.tocado[k] && Object.keys(S.tocado[k]).length;
-    const est = hayCambios ? ["pendiente","Sin guardar"]
-              : it ? ["guardado","Guardado"] : ["pendiente","Sin datos"];
+    if(dePlanta.length){
+      html += `<div class="bloque-planta">
+        <p class="rotulo-bloque">Personal del almacén</p>
+        <div class="rejilla">${celdasDe(jefe, dePlanta)}</div>
+      </div>`;
+    }
 
-    html += `<section class="linea-prod" data-empresa="${escapar(c.empresa)}" id="l_${escapar(k)}">
-      <div class="linea-cab">
-        <h3>Planta ${escapar(c.planta)}${c.sub ? " · " + escapar(c.sub) : ""}</h3>
-        <span class="etq ${c.empresa === "FCAP" ? "fcap" : "torr"}">${escapar(c.empresa)}</span>
-        <span class="estado ${est[0]}" data-estado="${escapar(k)}"><i class="punto"></i>${est[1]}</span>
-      </div>
-      <div class="rejilla">${celdas}</div>
-      ${!c.principal && hayPorPlanta ? `<p class="nota-planta">Trabajadores, bajas y ausencias
-        se registran una sola vez por almacén, en la línea
-        ${escapar(principalDe(c) || "principal")}.</p>` : ""}
-    </section>`;
+    for(const c of cs){
+      if(itemDe(c)) guardadas++;
+      html += `<div class="linea-cab">
+          <h3>${c.sub ? escapar(c.sub) : "Producción"}</h3>
+          ${marcaEstado(c)}
+        </div>
+        <div class="rejilla">${celdasDe(c, deLinea)}</div>`;
+    }
+    html += `</section>`;
   }
   $("contenido").innerHTML = html;
 
