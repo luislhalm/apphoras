@@ -182,20 +182,22 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 <script>
 const CFG = {
   // Registro de aplicación en Azure AD (el mismo que usas en las otras apps)
-  clientId : "PON-AQUI-EL-CLIENT-ID",
-  tenantId : "PON-AQUI-EL-TENANT-ID",
+  clientId : "4d788475-f563-43af-8e32-073c6b7f6f4b",
+  tenantId : "4af64d57-4be2-49ee-863f-1a7faee6e22b",
 
   // Sitio de SharePoint y lista
-  hostname : "tudominio.sharepoint.com",
+  hostname : "grupolopezguillensl.sharepoint.com",
   rutaSitio: "/sites/IndustrialCAPA",     // ruta del sitio, tal cual sale en la URL
   lista    : "datos industrial",          // nombre visible de la lista
 
-  // Columnas que identifican la fila (no se editan en el formulario)
+  // Columnas que identifican la fila. Se indican por NOMBRE VISIBLE:
+  // la app traduce sola al nombre interno (field_1, field_5, Title...)
   colFecha   : "fecha",
   colPlanta  : "id_planta",
   colSubPlanta: "subid_planta",
   colEmpresa : "xempresa_id",
   colId      : "id",                      // id propio heredado de SQL; se autogenera (máx + 1)
+                                          // ojo: su nombre interno real suele ser "Title"
 
   // Empresas disponibles en el desplegable
   empresas : ["FCAP","TORR"],
@@ -204,9 +206,9 @@ const CFG = {
   diaDelMes : "ultimo",
 
   // Columnas que NO deben aparecer como campos del formulario
-  excluir : ["Title","ID","Modified","Created","Author","Editor","Attachments","ContentType"],
+  excluir : ["ID","Modified","Created","Author","Editor","Attachments","ContentType","LinkTitle"],
 
-  // Etiquetas más legibles (opcional). Clave = nombre interno de la columna
+  // Etiquetas más legibles (opcional). Clave = nombre VISIBLE de la columna
   etiquetas : {
     nhorasextras_mes  : "Horas extras",
     nhorastotales_mes : "Horas totales",
@@ -274,6 +276,7 @@ const CFG = {
   <div class="pie-fila">
     <div class="pie-nota" id="pieNota"></div>
     <div class="pie-acciones">
+      <button class="btn-texto" id="btnCols">Ver columnas</button>
       <button class="btn-sec" id="btnLinea">Añadir línea</button>
       <button class="btn btn-naranja" id="btnGuardar">Guardar cambios</button>
     </div>
@@ -287,6 +290,8 @@ const CFG = {
 const S = {
   msal:null, cuenta:null, token:null,
   siteId:null, listId:null,
+  col:{},             // nombres internos resueltos de las columnas clave
+  cols:[],            // esquema completo de la lista
   campos:[],          // columnas editables descubiertas en la lista
   items:[],           // todos los elementos de la lista
   combos:[],          // combinaciones planta/sublínea/empresa conocidas
@@ -410,15 +415,59 @@ async function resolverLista(){
   S.listId = l.id;
 
   const cols = await graph(`/sites/${S.siteId}/lists/${S.listId}/columns`);
-  const reservadas = [CFG.colFecha, CFG.colPlanta, CFG.colSubPlanta, CFG.colEmpresa, CFG.colId];
-  S.campos = cols.value
+  S.cols = cols.value;
+
+  // Los nombres internos que genera SharePoint al importar un CSV son field_1,
+  // field_5, Title... mientras que el visible conserva el encabezado original.
+  // Aquí traducimos lo que pone en CFG (visible) al interno que exige Graph.
+  const buscar = etiqueta => {
+    if(!etiqueta) return null;
+    const e = String(etiqueta).trim().toLowerCase();
+    const c = S.cols.find(x => (x.displayName||"").trim().toLowerCase() === e)
+           || S.cols.find(x => (x.name||"").trim().toLowerCase() === e);
+    return c ? c.name : null;
+  };
+
+  S.col = {
+    fecha  : buscar(CFG.colFecha),
+    planta : buscar(CFG.colPlanta),
+    sub    : buscar(CFG.colSubPlanta),
+    empresa: buscar(CFG.colEmpresa),
+    id     : buscar(CFG.colId)
+  };
+
+  const faltan = ["fecha","planta","empresa"].filter(k => !S.col[k]);
+  if(faltan.length){
+    const disponibles = S.cols.filter(c => !c.hidden)
+      .map(c => `${c.displayName} → ${c.name}`).join(", ");
+    throw new Error(`No encuentro las columnas ${faltan.join(", ")} en la lista. `
+      + `Columnas disponibles: ${disponibles}`);
+  }
+
+  const reservadas = Object.values(S.col).filter(Boolean);
+  S.campos = S.cols
     .filter(c => !c.hidden && !c.readOnly && !c.name.startsWith("_")
-              && !CFG.excluir.includes(c.name) && !reservadas.includes(c.name))
+              && !CFG.excluir.includes(c.name)
+              && !CFG.excluir.includes(c.displayName)
+              && !reservadas.includes(c.name))
     .map(c => ({
-      nombre: c.name,
-      etiqueta: CFG.etiquetas[c.name] || c.displayName || c.name,
+      nombre  : c.name,
+      etiqueta: CFG.etiquetas[c.displayName] || CFG.etiquetas[c.name] || c.displayName || c.name,
       numerico: !!c.number
     }));
+}
+
+// Diagnóstico: equivalencia entre nombre visible y nombre interno
+function verColumnas(){
+  const filas = S.cols.filter(c => !c.hidden)
+    .map(c => `<tr><td style="padding:3px 14px 3px 0">${escapar(c.displayName||"")}</td>`
+            + `<td style="padding:3px 0;font-weight:600">${escapar(c.name)}</td></tr>`).join("");
+  $("avisos").innerHTML = `<div class="aviso info">
+    <strong>Columnas de la lista</strong>
+    <table style="margin-top:8px;border-collapse:collapse;font-size:13px">
+      <tr><th style="text-align:left;padding-right:14px">Nombre visible</th>
+          <th style="text-align:left">Nombre interno</th></tr>${filas}</table></div>`;
+  window.scrollTo({top:0, behavior:"smooth"});
 }
 
 async function cargarItems(){
@@ -436,9 +485,9 @@ async function cargarItems(){
   for(const it of todos){
     const f = it.fields || {};
     const c = {
-      planta : f[CFG.colPlanta],
-      sub    : f[CFG.colSubPlanta] || "",
-      empresa: f[CFG.colEmpresa] || ""
+      planta : f[S.col.planta],
+      sub    : f[S.col.sub] || "",
+      empresa: f[S.col.empresa] || ""
     };
     if(c.planta === undefined || c.planta === null) continue;
     vistos.set(clave(c), c);
@@ -452,7 +501,7 @@ async function cargarItems(){
 function siguienteId(){
   let max = 0;
   for(const it of S.items){
-    const v = Number((it.fields||{})[CFG.colId]);
+    const v = Number((it.fields||{})[S.col.id]);
     if(!isNaN(v) && v > max) max = v;
   }
   return max + 1;
@@ -465,10 +514,10 @@ function lineasVisibles(){
 function itemDe(combo){
   return S.items.find(it => {
     const f = it.fields || {};
-    return mesDeFecha(f[CFG.colFecha]) === S.mes
-      && String(f[CFG.colPlanta]) === String(combo.planta)
-      && String(f[CFG.colSubPlanta] || "") === String(combo.sub || "")
-      && String(f[CFG.colEmpresa] || "") === String(combo.empresa || "");
+    return mesDeFecha(f[S.col.fecha]) === S.mes
+      && String(f[S.col.planta]) === String(combo.planta)
+      && String(f[S.col.sub] || "") === String(combo.sub || "")
+      && String(f[S.col.empresa] || "") === String(combo.empresa || "");
   });
 }
 
@@ -584,11 +633,11 @@ async function guardar(){
           {method:"PATCH", body: JSON.stringify(fields)});
         existente.fields = Object.assign({}, existente.fields, r || fields);
       }else{
-        fields[CFG.colFecha]     = fechaIso;
-        fields[CFG.colPlanta]    = isNaN(Number(planta)) ? planta : Number(planta);
-        fields[CFG.colSubPlanta] = sub;
-        fields[CFG.colEmpresa]   = empresa;
-        if(CFG.colId) fields[CFG.colId] = nuevoId++;
+        fields[S.col.fecha]     = fechaIso;
+        fields[S.col.planta]    = isNaN(Number(planta)) ? planta : Number(planta);
+        fields[S.col.sub] = sub;
+        fields[S.col.empresa]   = empresa;
+        if(S.col.id) fields[S.col.id] = nuevoId++;
         const creado = await graph(`/sites/${S.siteId}/lists/${S.listId}/items`,
           {method:"POST", body: JSON.stringify({fields})});
         S.items.push(creado);
@@ -682,6 +731,7 @@ $("selEmpresa").addEventListener("change", () => {
 });
 $("btnGuardar").addEventListener("click", guardar);
 $("btnLinea").addEventListener("click", anadirLinea);
+$("btnCols").addEventListener("click", verColumnas);
 window.addEventListener("beforeunload", e => {
   if(Object.keys(S.tocado).some(k => Object.keys(S.tocado[k]).length)){
     e.preventDefault(); e.returnValue = "";
