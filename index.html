@@ -260,7 +260,7 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 <script>
 const CFG = {
   // Versión que se muestra en la cabecera. Súbela al publicar cambios.
-  version : "1.5",
+  version : "1.6",
 
   // Registro de aplicación en Azure AD (el mismo que usas en las otras apps)
   clientId : "4d788475-f563-43af-8e32-073c6b7f6f4b",
@@ -318,9 +318,9 @@ const CFG = {
       nota:"Total de las plantas seleccionadas",
       partes:[ { col:"num_trab_produc", etiqueta:"Trabajadores", color:"#2a78d6" },
                { col:"num_bajas",       etiqueta:"Bajas",        color:"#e34948" } ] },
-    { forma:"lineas", etiqueta:"Toneladas no conformes por trabajador",
-      nota:"Tn del mes entre la plantilla declarada", decimales:2,
-      razon:{ num:"tn_noconformes", numAgr:"suma",
+    { forma:"lineas", etiqueta:"Horas de actividad por trabajador",
+      nota:"Horas del mes entre la plantilla declarada", decimales:1,
+      razon:{ num:"horas_actividad", numAgr:"suma",
               den:"num_trab_produc", denAgr:"unico" } }
   ],
 
