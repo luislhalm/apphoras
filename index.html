@@ -250,8 +250,9 @@ const CFG = {
     { col:"num_ausencias",  etiqueta:"Nº ausencias",                porPlanta:true }
   ],
 
-  // Columnas de sistema que nunca son campos del formulario
-  excluir : ["ID","Title","Modified","Created","Author","Editor","Attachments","ContentType",
+  // Columnas de sistema que nunca son campos del formulario.
+  // Ojo: "Title" NO va aquí, porque al importar el CSV es donde acabó tu columna "id".
+  excluir : ["ID","Modified","Created","Author","Editor","Attachments","ContentType",
              "Edit","LinkTitle","LinkTitleNoMenu","DocIcon","ItemChildCount","FolderChildCount",
              "AppAuthor","AppEditor","ComplianceAssetId","_UIVersionString"]
 };
@@ -338,6 +339,10 @@ const S = {
 };
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
+// Columnas que SharePoint gestiona por su cuenta y nunca admiten escritura
+const SISTEMA = ["ID","Modified","Created","Author","Editor","Attachments","ContentType",
+  "Edit","LinkTitle","LinkTitleNoMenu","LinkFilename","DocIcon","ItemChildCount",
+  "FolderChildCount","AppAuthor","AppEditor","ComplianceAssetId","GUID","FileLeafRef"];
 const $ = id => document.getElementById(id);
 
 /* ============ utilidades ============ */
@@ -508,14 +513,20 @@ async function resolverLista(){
 
   // Traduce nombre visible -> nombre interno. Acepta coincidencia exacta y,
   // si no la hay, por prefijo (los encabezados salen truncados en la vista).
+  // Solo se consideran columnas escribibles: SharePoint arrastra variantes de
+  // Title (LinkTitle, LinkTitleNoMenu...) que comparten nombre visible y son
+  // de solo lectura, y elegirlas provoca un 403 al guardar.
+  const candidatas = S.cols.filter(c => !c.readOnly && !c.hidden
+                                     && !c.name.startsWith("_")
+                                     && !SISTEMA.includes(c.name));
   const buscar = etiqueta => {
     if(!etiqueta) return null;
     const e = String(etiqueta).trim().toLowerCase();
     const norm = x => String(x||"").trim().toLowerCase();
-    return (S.cols.find(c => norm(c.displayName) === e)
-         || S.cols.find(c => norm(c.name) === e)
-         || S.cols.find(c => norm(c.displayName).startsWith(e))
-         || S.cols.find(c => norm(c.name).startsWith(e))
+    return (candidatas.find(c => norm(c.displayName) === e)
+         || candidatas.find(c => norm(c.name) === e)
+         || candidatas.find(c => norm(c.displayName).startsWith(e))
+         || candidatas.find(c => norm(c.name).startsWith(e))
          || {}).name || null;
   };
 
@@ -809,6 +820,10 @@ async function guardar(){
         fields[S.col.sub] = sub;
         fields[S.col.empresa]   = empresa;
         if(S.col.id) fields[S.col.id] = nuevoId++;
+        for(const n of Object.keys(fields)){
+          const c = S.cols.find(x => x.name === n);
+          if(SISTEMA.includes(n) || (c && c.readOnly)) delete fields[n];
+        }
         const creado = await graph(`/sites/${S.siteId}/lists/${S.listId}/items`,
           {method:"POST", body: JSON.stringify({fields})});
         S.items.push(creado);
