@@ -87,7 +87,7 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .cierre-mes .rotulo{font-size:12.5px;color:var(--tinta-suave);margin-bottom:5px}
 .cierre-mes .nombre{
   font-size:34px;font-weight:700;letter-spacing:-.025em;line-height:1.05;
-  text-transform:capitalize;margin-bottom:12px;
+  margin-bottom:12px;
 }
 .campo{display:flex;flex-direction:column;gap:5px}
 .campo label{font-size:12.5px;color:var(--tinta-suave)}
@@ -175,6 +175,54 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .rejilla-planta .celda:last-child{border-right:none}
 .linea-cab{background:#FAFAFB}
 .nota-planta{margin:0;padding:10px 18px;font-size:12.5px;color:var(--tinta-suave);border-bottom:1px solid var(--linea)}
+
+/* ---------- pestañas ---------- */
+.pestanas{background:var(--superficie);border-bottom:1px solid var(--linea);
+  position:sticky;top:61px;z-index:35}
+.pestanas-fila{max-width:1240px;margin:0 auto;padding:0 22px;display:flex;gap:4px}
+.pestana{background:none;border:none;padding:12px 16px 10px;font-weight:600;
+  color:var(--tinta-suave);border-bottom:2px solid transparent;margin-bottom:-1px}
+.pestana:hover{color:var(--tinta)}
+.pestana.activa{color:var(--tinta);border-bottom-color:var(--naranja)}
+
+/* ---------- filtros ---------- */
+.filtros{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:20px}
+.grupo-seg{display:flex;border:1px solid var(--linea-fuerte);background:#fff}
+.grupo-seg button{background:none;border:none;padding:9px 18px;font-weight:600;
+  color:var(--tinta-suave);border-right:1px solid var(--linea)}
+.grupo-seg button:last-child{border-right:none}
+.grupo-seg button[aria-pressed="true"]{background:var(--tinta);color:#fff}
+
+/* ---------- tarjetas de gráfica ---------- */
+.parrilla{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:14px}
+.tarjeta{background:var(--superficie);border:1px solid var(--linea);padding:18px 20px 14px}
+.tarjeta h3{margin:0;font-size:15.5px;font-weight:700;letter-spacing:-.01em}
+.tarjeta .sub{margin:3px 0 0;font-size:12.5px;color:var(--tinta-suave)}
+.leyenda{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 4px}
+.leyenda span{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--tinta-suave)}
+.leyenda i{width:14px;height:2px;border-radius:1px;display:block}
+.lienzo{position:relative}
+.lienzo svg{display:block;width:100%}
+.globo{position:absolute;pointer-events:none;background:var(--superficie);
+  border:1px solid var(--linea-fuerte);padding:8px 11px;font-size:12.5px;
+  box-shadow:0 2px 8px rgba(0,0,0,.09);z-index:5;min-width:132px}
+.globo .cab{color:var(--tinta-suave);margin-bottom:5px}
+.globo .fila{display:flex;align-items:center;gap:7px;margin-top:3px}
+.globo .fila i{width:12px;height:2px;border-radius:1px;flex-shrink:0}
+.globo .fila b{font-weight:700;font-variant-numeric:tabular-nums;margin-left:auto}
+.globo .fila em{font-style:normal;color:var(--tinta-suave)}
+.tabla-datos{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}
+.tabla-datos th,.tabla-datos td{padding:6px 10px;border-bottom:1px solid var(--linea);
+  text-align:right;font-variant-numeric:tabular-nums}
+.tabla-datos th:first-child,.tabla-datos td:first-child{text-align:left;
+  font-variant-numeric:normal}
+.tabla-datos thead th{color:var(--tinta-suave);font-weight:600;
+  border-bottom:1px solid var(--linea-fuerte)}
+.tabla-datos .llave{display:inline-block;width:12px;height:2px;border-radius:1px;
+  margin-right:6px;vertical-align:middle}
+.sin-datos{padding:38px 0;text-align:center;color:var(--tinta-suave);font-size:13.5px}
+@media (max-width:560px){.parrilla{grid-template-columns:1fr}}
+
 .oculto{display:none !important}
 @media (max-width:760px){
   .planta-cab{flex-direction:column}
@@ -234,6 +282,24 @@ const CFG = {
   // Orden en que se muestran las líneas dentro de cada almacén
   ordenLineas : ["SACOS","BOLSAS"],
 
+  // Gráficas de la pestaña "Ver datos".
+  // agregado: "suma" une las líneas de la planta; "unico" toma el valor de planta.
+  graficas : [
+    { col:"tn_noconformes", etiqueta:"Toneladas no conformes",
+      nota:"Suma de las líneas de cada planta", agregado:"suma", decimales:1 },
+    { col:"horas_actividad", etiqueta:"Horas de actividad",
+      nota:"Suma de las líneas de cada planta", agregado:"suma", decimales:0 },
+    { col:"num_trab_produc", etiqueta:"Trabajadores de producción",
+      nota:"Plantilla declarada del almacén", agregado:"unico", decimales:0 },
+    { col:"num_bajas", etiqueta:"Bajas del mes",
+      nota:"Bajas declaradas del almacén", agregado:"unico", decimales:0 }
+  ],
+
+  // Colores de serie por planta. Validados para daltonismo sobre fondo claro.
+  // El color va con la planta, no con su posición, para que al filtrar por
+  // empresa las plantas no cambien de color.
+  coloresPlanta : ["#942E86","#F08900","#1baf7a","#2a78d6","#4a3aa7","#e34948"],
+
   // Día del mes que se graba en la columna fecha: "ultimo" o "primero"
   diaDelMes : "ultimo",
 
@@ -282,9 +348,35 @@ const CFG = {
 </div>
 
 <!-- ================= APP ================= -->
+<nav class="pestanas oculto" id="pestanas">
+  <div class="pestanas-fila">
+    <button class="pestana activa" id="tabRegistro" aria-selected="true">Registrar datos</button>
+    <button class="pestana" id="tabDatos" aria-selected="false">Ver datos</button>
+  </div>
+</nav>
+
 <main class="envoltorio oculto" id="app">
   <div id="avisos"></div>
 
+  <!-- ---------- VISTA: VER DATOS ---------- -->
+  <div id="vistaDatos" class="oculto">
+    <div class="filtros">
+      <div class="grupo-seg" id="segEmpresa" role="group" aria-label="Empresa"></div>
+      <div class="campo">
+        <label for="selPeriodo">Periodo</label>
+        <select id="selPeriodo">
+          <option value="12">Últimos 12 meses</option>
+          <option value="24">Últimos 24 meses</option>
+          <option value="0">Todo el histórico</option>
+        </select>
+      </div>
+      <button class="btn-texto" id="btnTablas" style="margin-left:auto">Ver como tabla</button>
+    </div>
+    <div class="parrilla" id="graficas"></div>
+  </div>
+
+  <!-- ---------- VISTA: REGISTRO ---------- -->
+  <div id="vistaRegistro">
   <section class="cierre">
     <div class="cierre-mes">
       <div class="rotulo">Mes que estás cerrando</div>
@@ -307,6 +399,7 @@ const CFG = {
   </section>
 
   <div id="contenido"><div class="cargando">Cargando datos…</div></div>
+  </div>
 </main>
 
 <!-- ================= PIE DE GUARDADO ================= -->
@@ -334,6 +427,11 @@ const S = {
   combos:[],          // combinaciones planta/sublínea/empresa conocidas
   extra:[],           // líneas añadidas a mano en esta sesión
   mes:null, empresa:null,
+  vista:"registro",      // "registro" | "datos"
+  metricas:[],           // gráficas con el nombre interno ya resuelto
+  colorPlanta:{},        // planta -> color fijo
+  periodo:12,            // meses hacia atrás que se representan
+  tablas:false,          // true = ver los datos como tabla
   tocado:{},          // { claveLinea: { campo: valor } }
   guardando:false
 };
@@ -357,7 +455,8 @@ function mesAnterior(){
 function nombreMes(ym){
   if(!ym) return "—";
   const [y,m] = ym.split("-").map(Number);
-  return new Date(y, m-1, 1).toLocaleDateString("es-ES",{month:"long", year:"numeric"});
+  const t = new Date(y, m-1, 1).toLocaleDateString("es-ES",{month:"long", year:"numeric"});
+  return t.charAt(0).toUpperCase() + t.slice(1);
 }
 // Fecha que se graba: mediodía UTC para que ningún huso cambie el día
 function fechaDeMes(ym){
@@ -562,6 +661,11 @@ async function resolverLista(){
       .map(c => ({ nombre:c.name, etiqueta:c.displayName||c.name, numerico:!!c.number }));
     S.camposNoHallados = [];
   }
+
+  S.metricas = (CFG.graficas || []).map(g => {
+    const n = buscar(g.col);
+    return n ? Object.assign({}, g, {nombre:n}) : null;
+  }).filter(Boolean);
 }
 
 // Diagnóstico
@@ -860,10 +964,421 @@ function cambiarMes(){
   S.tocado = {}; S.mes = v; limpiarAvisos(); pintar();
 }
 
+
+/* ==================================================================
+   VER DATOS — gráficas
+   ================================================================== */
+
+const VIZ = {
+  alto      : 232,
+  margen    : { arriba:14, derecha:66, abajo:26, izquierda:56 },
+  rejilla   : "#E2E3E7",
+  ejeTexto  : "#7A7573",
+  superficie: "#FFFFFF"
+};
+
+// El color acompaña a la planta, no a su posición en el filtro.
+function asignarColores(){
+  const plantas = new Set();
+  for(const c of S.combos) plantas.add(txt(c.planta));
+  for(const it of S.items) plantas.add(txt((it.fields||{})[S.col.planta]));
+  const orden = [...plantas].filter(x => x !== "")
+    .sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b));
+  S.colorPlanta = {};
+  const pool = CFG.coloresPlanta || [];
+  orden.forEach((pl,i) => { S.colorPlanta[pl] = pool[i % pool.length]; });
+}
+
+function mesesDelPeriodo(){
+  const conDatos = [...new Set(S.items.map(i => mesDeFecha((i.fields||{})[S.col.fecha])))]
+    .filter(Boolean).sort();
+  if(!conDatos.length) return [];
+  const fin = conDatos[conDatos.length-1];
+  const n = Number(S.periodo) || 0;
+  if(!n) {                                    // histórico completo, sin huecos
+    return rangoMeses(conDatos[0], fin);
+  }
+  const [y,m] = fin.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m-1-(n-1), 1));
+  const ini = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}`;
+  return rangoMeses(ini > conDatos[0] ? ini : conDatos[0], fin);
+}
+function rangoMeses(ini, fin){
+  const out = [];
+  let [y,m] = ini.split("-").map(Number);
+  const [fy,fm] = fin.split("-").map(Number);
+  while(y < fy || (y === fy && m <= fm)){
+    out.push(`${y}-${String(m).padStart(2,"0")}`);
+    m++; if(m > 12){ m = 1; y++; }
+  }
+  return out;
+}
+
+// Agrega los elementos de la lista para una métrica concreta
+function datosMetrica(met, meses){
+  const porPlanta = new Map();
+  for(const it of S.items){
+    const f = it.fields || {};
+    if(txt(f[S.col.empresa]) !== txt(S.empresa)) continue;
+    const mes = mesDeFecha(f[S.col.fecha]);
+    if(!mes || meses.indexOf(mes) === -1) continue;
+    const v = Number(f[met.nombre]);
+    if(!isFinite(v)) continue;
+    const pl = txt(f[S.col.planta]);
+    if(pl === "") continue;
+    if(!porPlanta.has(pl)) porPlanta.set(pl, new Map());
+    const serie = porPlanta.get(pl);
+    const previo = serie.get(mes);
+    // "suma" une SACOS + BOLSAS; "unico" es un dato del almacén, no se acumula
+    serie.set(mes, previo === undefined ? v
+              : (met.agregado === "suma" ? previo + v : Math.max(previo, v)));
+  }
+  const series = [...porPlanta.keys()]
+    .sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b))
+    .map(pl => ({
+      planta : pl,
+      nombre : "Planta " + pl,
+      color  : S.colorPlanta[pl] || "#7A7573",
+      valores: meses.map(m => { const v = porPlanta.get(pl).get(m);
+                               return v === undefined ? null : v; })
+    }))
+    .filter(sr => sr.valores.some(v => v !== null));
+  return series;
+}
+
+function fmt(v, dec){
+  if(v === null || v === undefined) return "—";
+  return v.toLocaleString("es-ES", {minimumFractionDigits:dec, maximumFractionDigits:dec});
+}
+function mesCorto(ym){
+  const [y,m] = ym.split("-").map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString("es-ES",{month:"short"})
+       .replace(".","") + " " + String(y).slice(2);
+}
+// Escala con topes redondos: 0 / 250 / 500 / 750 / 1.000
+function escalaY(max){
+  if(!(max > 0)) return {tope:1, pasos:[0,1]};
+  const crudo = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(crudo)));
+  const norm = crudo / mag;
+  const paso = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 2.5 ? 2.5 : norm <= 5 ? 5 : 10) * mag;
+  const tope = Math.ceil(max / paso) * paso;
+  const pasos = [];
+  for(let v = 0; v <= tope + paso/2; v += paso) pasos.push(Number(v.toFixed(6)));
+  return {tope, pasos};
+}
+
+function svgEl(t, attrs){
+  const e = document.createElementNS("http://www.w3.org/2000/svg", t);
+  for(const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+function dibujarGrafica(caja, met, meses, series){
+  caja.innerHTML = "";
+  if(!series.length || !meses.length){
+    caja.innerHTML = `<p class="sin-datos">Todavía no hay datos declarados en este periodo.</p>`;
+    return;
+  }
+
+  const an = Math.max(caja.clientWidth || caja.getBoundingClientRect().width || 480, 300);
+  const al = VIZ.alto, M = VIZ.margen;
+  const px = an - M.izquierda - M.derecha;      // ancho del área de trazado
+  const py = al - M.arriba - M.abajo;
+
+  let max = 0;
+  for(const sr of series) for(const v of sr.valores) if(v !== null && v > max) max = v;
+  const esc = escalaY(max);
+  const X = i => meses.length === 1 ? M.izquierda + px/2
+                                    : M.izquierda + (i/(meses.length-1))*px;
+  const Y = v => M.arriba + py - (v/esc.tope)*py;
+
+  const svg = svgEl("svg", {viewBox:`0 0 ${an} ${al}`, height:al,
+                            role:"img", "aria-label":met.etiqueta});
+
+  // --- rejilla y eje Y (hairline continua, un paso por encima del fondo) ---
+  for(const v of esc.pasos){
+    svg.appendChild(svgEl("line", {x1:M.izquierda, x2:an-M.derecha, y1:Y(v), y2:Y(v),
+      stroke:VIZ.rejilla, "stroke-width":1}));
+    const t = svgEl("text", {x:M.izquierda-9, y:Y(v)+4, "text-anchor":"end",
+      "font-size":11, fill:VIZ.ejeTexto, "font-variant-numeric":"tabular-nums"});
+    t.textContent = v.toLocaleString("es-ES");
+    svg.appendChild(t);
+  }
+
+  // --- eje X: se muestran las etiquetas que caben ---
+  const salto = Math.max(1, Math.ceil(meses.length / Math.max(1, Math.floor(px/56))));
+  const marcas = [];
+  meses.forEach((m,i) => { if(i % salto === 0) marcas.push(i); });
+  const ultimo = meses.length-1;
+  if(marcas[marcas.length-1] !== ultimo){
+    // el último mes siempre se rotula; si el anterior le queda encima, se cae
+    if(X(ultimo) - X(marcas[marcas.length-1]) < 52) marcas.pop();
+    marcas.push(ultimo);
+  }
+  for(const i of marcas){
+    const t = svgEl("text", {x:X(i), y:al-8, "text-anchor":"middle",
+      "font-size":11, fill:VIZ.ejeTexto});
+    t.textContent = mesCorto(meses[i]);
+    svg.appendChild(t);
+  }
+
+  // --- líneas de 2px, con hueco allí donde no hay dato ---
+  for(const sr of series){
+    let tramo = [];
+    const cerrar = () => {
+      if(tramo.length === 1){
+        svg.appendChild(svgEl("circle", {cx:tramo[0][0], cy:tramo[0][1], r:3.5,
+          fill:sr.color}));
+      }else if(tramo.length > 1){
+        svg.appendChild(svgEl("path", {d:"M"+tramo.map(pt => pt.join(" ")).join("L"),
+          fill:"none", stroke:sr.color, "stroke-width":2,
+          "stroke-linejoin":"round", "stroke-linecap":"round"}));
+      }
+      tramo = [];
+    };
+    sr.valores.forEach((v,i) => { if(v === null) cerrar(); else tramo.push([X(i), Y(v)]); });
+    cerrar();
+  }
+
+  // --- punto final con anillo de 2px en color de fondo ---
+  const finales = [];
+  for(const sr of series){
+    let ult = -1;
+    sr.valores.forEach((v,i) => { if(v !== null) ult = i; });
+    if(ult === -1) continue;
+    const cx = X(ult), cy = Y(sr.valores[ult]);
+    svg.appendChild(svgEl("circle", {cx, cy, r:4.5, fill:sr.color,
+      stroke:VIZ.superficie, "stroke-width":2}));
+    finales.push({sr, cx, cy, valor:sr.valores[ult]});
+  }
+
+  // --- etiqueta al final de cada línea, separada si se solapa ---
+  finales.sort((a,b) => a.cy - b.cy);
+  let previo = -Infinity;
+  for(const f of finales){
+    const y = Math.max(f.cy, previo + 14);
+    previo = y;
+    if(Math.abs(y - f.cy) > 2){   // línea guía cuando la etiqueta se ha movido
+      svg.appendChild(svgEl("line", {x1:f.cx+5, y1:f.cy, x2:f.cx+11, y2:y-3,
+        stroke:VIZ.rejilla, "stroke-width":1}));
+    }
+    const t = svgEl("text", {x:f.cx+11, y:y+3.5, "font-size":11.5,
+      "font-weight":600, fill:"#3E3938", "font-variant-numeric":"tabular-nums"});
+    t.textContent = fmt(f.valor, met.decimales);
+    svg.appendChild(t);
+  }
+
+  // --- capa de exploración: retícula y globo con todas las series ---
+  const reticula = svgEl("line", {y1:M.arriba, y2:M.arriba+py, stroke:"#B9BBC1",
+    "stroke-width":1, opacity:0});
+  svg.appendChild(reticula);
+  const focos = series.map(sr => {
+    const c = svgEl("circle", {r:4.5, fill:sr.color, stroke:VIZ.superficie,
+      "stroke-width":2, opacity:0});
+    svg.appendChild(c); return c;
+  });
+  const zona = svgEl("rect", {x:M.izquierda, y:M.arriba, width:px, height:py,
+    fill:"transparent", tabindex:0, role:"application",
+    "aria-label":met.etiqueta + ". Use las flechas para recorrer los meses."});
+  svg.appendChild(zona);
+  caja.appendChild(svg);
+
+  const globo = document.createElement("div");
+  globo.className = "globo oculto";
+  caja.appendChild(globo);
+
+  let idx = -1;
+  function situar(i){
+    if(i < 0 || i >= meses.length) return;
+    idx = i;
+    reticula.setAttribute("x1", X(i)); reticula.setAttribute("x2", X(i));
+    reticula.setAttribute("opacity", 1);
+
+    globo.innerHTML = "";
+    const cab = document.createElement("div");
+    cab.className = "cab";
+    cab.textContent = nombreMes(meses[i]);
+    globo.appendChild(cab);
+
+    series.forEach((sr,j) => {
+      const v = sr.valores[i];
+      focos[j].setAttribute("opacity", v === null ? 0 : 1);
+      if(v !== null){ focos[j].setAttribute("cx", X(i)); focos[j].setAttribute("cy", Y(v)); }
+      const fila = document.createElement("div");
+      fila.className = "fila";
+      const llave = document.createElement("i");
+      llave.style.background = sr.color;
+      const nom = document.createElement("em");
+      nom.textContent = sr.nombre;
+      const val = document.createElement("b");
+      val.textContent = fmt(v, met.decimales);
+      fila.appendChild(llave); fila.appendChild(nom); fila.appendChild(val);
+      globo.appendChild(fila);
+    });
+
+    globo.classList.remove("oculto");
+    const ancho = globo.offsetWidth || 150;
+    let gx = X(i) + 14;
+    if(gx + ancho > an) gx = X(i) - ancho - 14;
+    globo.style.left = Math.max(4, gx) + "px";
+    globo.style.top  = (M.arriba + 4) + "px";
+  }
+  function ocultar(){
+    reticula.setAttribute("opacity", 0);
+    focos.forEach(f => f.setAttribute("opacity", 0));
+    globo.classList.add("oculto");
+  }
+  function desdeX(clientX){
+    const r = svg.getBoundingClientRect();
+    const rel = (clientX - r.left) * (an / r.width);
+    if(meses.length === 1) return 0;
+    return Math.max(0, Math.min(meses.length-1,
+      Math.round(((rel - M.izquierda) / px) * (meses.length-1))));
+  }
+  zona.addEventListener("pointermove", e => situar(desdeX(e.clientX)));
+  zona.addEventListener("pointerleave", ocultar);
+  zona.addEventListener("focus", () => situar(idx === -1 ? meses.length-1 : idx));
+  zona.addEventListener("blur", ocultar);
+  zona.addEventListener("keydown", e => {
+    if(e.key === "ArrowRight"){ situar(Math.min(meses.length-1, idx+1)); e.preventDefault(); }
+    if(e.key === "ArrowLeft"){  situar(Math.max(0, idx-1)); e.preventDefault(); }
+    if(e.key === "Escape") ocultar();
+  });
+}
+
+function tablaDe(met, meses, series){
+  const t = document.createElement("table");
+  t.className = "tabla-datos";
+  const thead = document.createElement("thead");
+  const trh = document.createElement("tr");
+  const th0 = document.createElement("th"); th0.textContent = "Mes"; trh.appendChild(th0);
+  for(const sr of series){
+    const th = document.createElement("th");
+    const k = document.createElement("span");
+    k.className = "llave"; k.style.background = sr.color;
+    th.appendChild(k);
+    th.appendChild(document.createTextNode(sr.nombre));
+    trh.appendChild(th);
+  }
+  thead.appendChild(trh); t.appendChild(thead);
+  const tb = document.createElement("tbody");
+  meses.forEach((m,i) => {
+    const tr = document.createElement("tr");
+    const td0 = document.createElement("td"); td0.textContent = nombreMes(m); tr.appendChild(td0);
+    for(const sr of series){
+      const td = document.createElement("td");
+      td.textContent = fmt(sr.valores[i], met.decimales);
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  });
+  t.appendChild(tb);
+  return t;
+}
+
+function pintarDatos(){
+  const cont = $("graficas");
+  cont.innerHTML = "";
+
+  if(!S.metricas.length){
+    cont.innerHTML = `<p class="sin-datos">No se han podido resolver las columnas de las gráficas.</p>`;
+    return;
+  }
+  const meses = mesesDelPeriodo();
+  const pendientes = [];
+
+  for(const met of S.metricas){
+    const series = datosMetrica(met, meses);
+
+    const card = document.createElement("article");
+    card.className = "tarjeta";
+
+    const h = document.createElement("h3"); h.textContent = met.etiqueta;
+    const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = met.nota || "";
+    card.appendChild(h); card.appendChild(sub);
+
+    // La leyenda acompaña siempre a dos o más series
+    if(series.length > 1){
+      const leg = document.createElement("div");
+      leg.className = "leyenda";
+      for(const sr of series){
+        const sp = document.createElement("span");
+        const i = document.createElement("i"); i.style.background = sr.color;
+        sp.appendChild(i); sp.appendChild(document.createTextNode(sr.nombre));
+        leg.appendChild(sp);
+      }
+      card.appendChild(leg);
+    }
+
+    if(S.tablas){
+      if(series.length) card.appendChild(tablaDe(met, meses, series));
+      else{
+        const p = document.createElement("p");
+        p.className = "sin-datos";
+        p.textContent = "Todavía no hay datos declarados en este periodo.";
+        card.appendChild(p);
+      }
+    }else{
+      const caja = document.createElement("div");
+      caja.className = "lienzo";
+      card.appendChild(caja);
+      pendientes.push({caja, met, series});
+    }
+    cont.appendChild(card);
+  }
+
+  // Se dibuja al final: cada lienzo necesita el ancho que le deja
+  // la rejilla ya completa, no el que tenía con media parrilla montada.
+  for(const t of pendientes) dibujarGrafica(t.caja, t.met, meses, t.series);
+}
+
+function cambiarVista(v){
+  S.vista = v;
+  const enDatos = v === "datos";
+  $("vistaDatos").classList.toggle("oculto", !enDatos);
+  $("vistaRegistro").classList.toggle("oculto", enDatos);
+  $("pie").classList.toggle("oculto", enDatos);
+  $("tabDatos").classList.toggle("activa", enDatos);
+  $("tabRegistro").classList.toggle("activa", !enDatos);
+  $("tabDatos").setAttribute("aria-selected", String(enDatos));
+  $("tabRegistro").setAttribute("aria-selected", String(!enDatos));
+  limpiarAvisos();
+  // Las dos vistas comparten el filtro de empresa, así que la que se
+  // muestra se repinta para no quedarse con la empresa anterior.
+  if(enDatos){ pintarSegEmpresa(); pintarDatos(); }
+  else{ $("selEmpresa").value = S.empresa; pintar(); }
+}
+
+function pintarSegEmpresa(){
+  const cont = $("segEmpresa");
+  cont.innerHTML = "";
+  for(const e of CFG.empresas){
+    const b = document.createElement("button");
+    b.textContent = e;
+    b.setAttribute("aria-pressed", String(txt(e) === txt(S.empresa)));
+    b.addEventListener("click", () => {
+      S.empresa = e;
+      $("selEmpresa").value = e;
+      pintarSegEmpresa();
+      pintarDatos();
+    });
+    cont.appendChild(b);
+  }
+}
+
+let temporizadorAncho = null;
+window.addEventListener("resize", () => {
+  if(S.vista !== "datos" || S.tablas) return;
+  clearTimeout(temporizadorAncho);
+  temporizadorAncho = setTimeout(pintarDatos, 180);
+});
+
 /* ============ arranque ============ */
 async function arrancar(){
   $("portada").classList.add("oculto");
   $("barra").classList.remove("oculto");
+  $("pestanas").classList.remove("oculto");
   $("app").classList.remove("oculto");
   $("usuario").textContent = S.cuenta.name || S.cuenta.username;
 
@@ -885,6 +1400,7 @@ async function arrancar(){
     if(!S.campos.length){
       aviso("La lista no tiene columnas editables que mostrar. Revisa el bloque CFG.excluir.", "mal");
     }
+    asignarColores();
     pintar();
   }catch(e){
     $("contenido").innerHTML = "";
@@ -918,6 +1434,16 @@ $("btnSalir").addEventListener("click", () => S.msal.logoutRedirect({
 $("selMes").addEventListener("change", cambiarMes);
 $("selEmpresa").addEventListener("change", () => {
   S.empresa = $("selEmpresa").value; limpiarAvisos(); pintar();
+});
+$("tabRegistro").addEventListener("click", () => cambiarVista("registro"));
+$("tabDatos").addEventListener("click", () => cambiarVista("datos"));
+$("selPeriodo").addEventListener("change", () => {
+  S.periodo = Number($("selPeriodo").value); pintarDatos();
+});
+$("btnTablas").addEventListener("click", () => {
+  S.tablas = !S.tablas;
+  $("btnTablas").textContent = S.tablas ? "Ver como gráfica" : "Ver como tabla";
+  pintarDatos();
 });
 $("btnGuardar").addEventListener("click", guardar);
 $("btnCols").addEventListener("click", verColumnas);
