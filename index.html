@@ -170,6 +170,8 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .planta-ident{display:flex;align-items:center;gap:10px;padding:15px 18px;
   min-width:200px;flex-shrink:0;border-right:1px solid var(--linea)}
 .planta-cab h2{margin:0;font-size:19px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+.planta-cab h2 small{display:block;font-size:11.5px;font-weight:400;
+  color:var(--tinta-suave);letter-spacing:0}
 .rejilla-planta{flex:1;grid-template-columns:repeat(auto-fit,minmax(165px,1fr))}
 .rejilla-planta .celda{border-bottom:none;display:flex;flex-direction:column;justify-content:center}
 .rejilla-planta .celda:last-child{border-right:none}
@@ -229,6 +231,8 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
   border-bottom:1px solid var(--linea-fuerte)}
 .tabla-datos .llave{display:inline-block;width:12px;height:2px;border-radius:1px;
   margin-right:6px;vertical-align:middle}
+.nota-huerfanas{grid-column:1/-1;margin:0;padding:11px 15px;font-size:13px;
+  background:var(--aviso-fondo);border:1px solid #E9C68C;color:#8A5A00}
 .sin-datos{padding:38px 0;text-align:center;color:var(--tinta-suave);font-size:13.5px}
 @media (max-width:560px){.parrilla{grid-template-columns:1fr}}
 
@@ -256,7 +260,7 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 <script>
 const CFG = {
   // Versión que se muestra en la cabecera. Súbela al publicar cambios.
-  version : "1.3",
+  version : "1.5",
 
   // Registro de aplicación en Azure AD (el mismo que usas en las otras apps)
   clientId : "4d788475-f563-43af-8e32-073c6b7f6f4b",
@@ -273,8 +277,9 @@ const CFG = {
   colPlanta  : "id_planta",
   colSubPlanta: "subid_planta",
   colEmpresa : "xempresa_id",
-  colId      : "id",                      // id propio heredado de SQL; se autogenera (máx + 1)
-                                          // ojo: su nombre interno real suele ser "Title"
+  // Correlativo heredado de SQL. Vacío = no se usa: la lista de SharePoint ya
+  // tiene su propio ID y en este caso "id" chocaba con "id_planta".
+  colId      : "",
 
   // Empresas disponibles en el desplegable
   empresas : ["FCAP","TORR"],
@@ -290,6 +295,14 @@ const CFG = {
     { empresa:"FCAP", planta:"5", sub:"",       principal:true },
     { empresa:"TORR", planta:"1", sub:"SACOS",  principal:true }
   ],
+
+  // Nombre con el que se muestra cada planta. En la lista se sigue guardando
+  // el código; esto solo cambia lo que se lee en pantalla.
+  // Un código que no esté aquí se considera inexistente: no se pinta y se avisa.
+  nombresPlanta : {
+    FCAP : { "1":"Abanilla", "2":"Archidona", "5":"Pantoja" },
+    TORR : { "1":"Torres Capa" }
+  },
 
   // Orden en que se muestran las líneas dentro de cada almacén
   ordenLineas : ["SACOS","BOLSAS"],
@@ -453,6 +466,7 @@ const S = {
   colorPlanta:{},        // planta -> color fijo
   periodo:12,            // meses hacia atrás que se representan
   plantas:new Set(),     // plantas del filtro; vacío = todas
+  desconocidas:new Set() ,// códigos de planta que no están en CFG.nombresPlanta
   tablas:false,          // true = ver los datos como tabla
   tocado:{},          // { claveLinea: { campo: valor } }
   guardando:false
@@ -509,6 +523,15 @@ function mostrar(v){
   return typeof v === "number" ? String(v).replace(".", ",") : String(v);
 }
 function txt(v){ return (v===null||v===undefined) ? "" : String(v).trim(); }
+function nombrePlanta(pl, emp){
+  const m = (CFG.nombresPlanta || {})[txt(emp || S.empresa)] || {};
+  return m[txt(pl)] || ("Planta " + txt(pl));
+}
+function plantaConocida(pl, emp){
+  const m = (CFG.nombresPlanta || {})[txt(emp || S.empresa)];
+  if(!m) return true;                       // empresa sin catálogo: no se filtra
+  return Object.prototype.hasOwnProperty.call(m, txt(pl));
+}
 function clave(c){ return `${c.planta}||${c.sub}||${c.empresa}`; }
 function escapar(s){ return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
@@ -780,6 +803,7 @@ async function cargarItems(){
 
   // Catálogo fijo primero; después, cualquier combinación histórica que no esté
   const vistos = new Map();
+  S.desconocidas = new Set();
   for(const c of (CFG.lineas || [])){
     const n = { planta:txt(c.planta), sub:txt(c.sub), empresa:txt(c.empresa),
                 principal: !!c.principal };
@@ -792,7 +816,8 @@ async function cargarItems(){
       sub    : S.col.sub ? txt(f[S.col.sub]) : "",
       empresa: txt(f[S.col.empresa])
     };
-    if(c.planta === "" ) continue;
+    if(c.planta === "") continue;
+    if(!plantaConocida(c.planta, c.empresa)){ S.desconocidas.add(c.empresa + " · " + c.planta); continue; }
     if(!vistos.has(clave(c))) vistos.set(clave(c), c);
   }
   S.combos = [...vistos.values()].sort((a,b) =>
@@ -897,7 +922,7 @@ function pintar(){
     html += `<section class="planta" data-empresa="${escapar(S.empresa)}">
       <div class="planta-cab">
         <div class="planta-ident">
-          <h2>Planta ${escapar(planta)}</h2>
+          <h2>${escapar(nombrePlanta(planta))}<small>planta ${escapar(planta)}</small></h2>
           <span class="etq ${etqEmp}">${escapar(S.empresa)}</span>
         </div>
         ${dePlanta.length ? `<div class="rejilla rejilla-planta">${celdasDe(jefe, dePlanta)}</div>` : ""}
@@ -1059,7 +1084,7 @@ function plantasDeEmpresa(){
     const f = it.fields || {};
     if(txt(f[S.col.empresa]) === txt(S.empresa)) set.add(txt(f[S.col.planta]));
   }
-  return [...set].filter(x => x !== "")
+  return [...set].filter(x => x !== "" && plantaConocida(x))
     .sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b));
 }
 function plantasElegidas(){
@@ -1101,7 +1126,7 @@ function porPlantaMes(colNombre, agregado, meses){
     const f = it.fields || {};
     if(txt(f[S.col.empresa]) !== txt(S.empresa)) continue;
     const pl = txt(f[S.col.planta]);
-    if(!validas.has(pl)) continue;
+    if(!validas.has(pl)) continue;   // incluye descartar códigos que no existen
     const mes = mesDeFecha(f[S.col.fecha]);
     if(!mes || meses.indexOf(mes) === -1) continue;
     const v = Number(f[colNombre]);
@@ -1120,7 +1145,7 @@ function seriesPorPlanta(mapa, meses){
   return [...mapa.keys()]
     .sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b))
     .map(pl => ({
-      nombre : "Planta " + pl,
+      nombre : nombrePlanta(pl),
       color  : S.colorPlanta[pl] || "#7A7573",
       valores: meses.map(m => { const v = mapa.get(pl).get(m); return v === undefined ? null : v; })
     }))
@@ -1139,7 +1164,7 @@ function seriesDeGrafica(g, meses){
         return (n === undefined || !d) ? null : n/d;   // sin plantilla no hay ratio
       });
       if(valores.some(v => v !== null))
-        series.push({nombre:"Planta " + pl, color:S.colorPlanta[pl] || "#7A7573", valores});
+        series.push({nombre:nombrePlanta(pl), color:S.colorPlanta[pl] || "#7A7573", valores});
     }
     return series;
   }
@@ -1444,6 +1469,15 @@ function pintarDatos(){
   const meses = mesesDelPeriodo();
   const pendientes = [];
 
+  if(S.desconocidas.size){
+    const n = document.createElement("p");
+    n.className = "nota-huerfanas";
+    n.textContent = "Hay filas con un código de planta que no existe y no se están "
+      + "representando: " + [...S.desconocidas].join(", ")
+      + ". Corrígelas en la lista de SharePoint.";
+    cont.appendChild(n);
+  }
+
   for(const def of S.metricas){
     const series = seriesDeGrafica(def, meses);
 
@@ -1520,7 +1554,7 @@ function pintarFiltros(){
     const punto = document.createElement("i");
     punto.style.background = S.colorPlanta[pl] || "#7A7573";
     b.appendChild(punto);
-    b.appendChild(document.createTextNode("Planta " + pl));
+    b.appendChild(document.createTextNode(nombrePlanta(pl)));
     b.setAttribute("aria-pressed", String(S.plantas.has(pl)));
     b.addEventListener("click", () => {
       if(S.plantas.has(pl)) S.plantas.delete(pl); else S.plantas.add(pl);
