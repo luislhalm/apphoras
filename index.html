@@ -185,6 +185,9 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .pestana:hover{color:var(--tinta)}
 .pestana.activa{color:var(--tinta);border-bottom-color:var(--naranja)}
 
+.version{font-size:11.5px;color:var(--tinta-suave);border:1px solid var(--linea);
+  padding:1px 7px;align-self:center}
+
 /* ---------- filtros ---------- */
 .filtros{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:20px}
 .grupo-seg{display:flex;border:1px solid var(--linea-fuerte);background:#fff}
@@ -201,6 +204,12 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
 .leyenda{display:flex;flex-wrap:wrap;gap:14px;margin:12px 0 4px}
 .leyenda span{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--tinta-suave)}
 .leyenda i{width:14px;height:2px;border-radius:1px;display:block}
+.leyenda i.caja{height:11px;width:11px;border-radius:2px}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{background:#fff;border:1px solid var(--linea-fuerte);padding:8px 12px;
+  font-size:13px;color:var(--tinta-suave);display:flex;align-items:center;gap:6px}
+.chips button i{width:8px;height:8px;border-radius:50%;display:block}
+.chips button[aria-pressed="true"]{border-color:var(--tinta);color:var(--tinta);font-weight:600}
 .lienzo{position:relative}
 .lienzo svg{display:block;width:100%}
 .globo{position:absolute;pointer-events:none;background:var(--superficie);
@@ -246,6 +255,9 @@ input,select{font-family:inherit;font-size:inherit;color:inherit}
      ================================================================== -->
 <script>
 const CFG = {
+  // Versión que se muestra en la cabecera. Súbela al publicar cambios.
+  version : "1.3",
+
   // Registro de aplicación en Azure AD (el mismo que usas en las otras apps)
   clientId : "4d788475-f563-43af-8e32-073c6b7f6f4b",
   tenantId : "4af64d57-4be2-49ee-863f-1a7faee6e22b",
@@ -285,14 +297,18 @@ const CFG = {
   // Gráficas de la pestaña "Ver datos".
   // agregado: "suma" une las líneas de la planta; "unico" toma el valor de planta.
   graficas : [
-    { col:"tn_noconformes", etiqueta:"Toneladas no conformes",
+    { forma:"lineas", col:"tn_noconformes", etiqueta:"Toneladas no conformes",
       nota:"Suma de las líneas de cada planta", agregado:"suma", decimales:1 },
-    { col:"horas_actividad", etiqueta:"Horas de actividad",
+    { forma:"lineas", col:"horas_actividad", etiqueta:"Horas de actividad",
       nota:"Suma de las líneas de cada planta", agregado:"suma", decimales:0 },
-    { col:"num_trab_produc", etiqueta:"Trabajadores de producción",
-      nota:"Plantilla declarada del almacén", agregado:"unico", decimales:0 },
-    { col:"num_bajas", etiqueta:"Bajas del mes",
-      nota:"Bajas declaradas del almacén", agregado:"unico", decimales:0 }
+    { forma:"columnas", etiqueta:"Personal", agregado:"unico", decimales:0,
+      nota:"Total de las plantas seleccionadas",
+      partes:[ { col:"num_trab_produc", etiqueta:"Trabajadores", color:"#2a78d6" },
+               { col:"num_bajas",       etiqueta:"Bajas",        color:"#e34948" } ] },
+    { forma:"lineas", etiqueta:"Toneladas no conformes por trabajador",
+      nota:"Tn del mes entre la plantilla declarada", decimales:2,
+      razon:{ num:"tn_noconformes", numAgr:"suma",
+              den:"num_trab_produc", denAgr:"unico" } }
   ],
 
   // Colores de serie por planta. Validados para daltonismo sobre fondo claro.
@@ -330,6 +346,7 @@ const CFG = {
   <div class="barra-fila">
     <img src="data:image/png;base64,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" alt="Cementos CAPA">
     <div class="barra-titulo">Cierre industrial<span>Datos mensuales por planta</span></div>
+    <span class="version" id="version"></span>
     <div class="barra-dcha">
       <span id="usuario"></span>
       <button class="btn-texto" id="btnSalir">Cerrar sesión</button>
@@ -362,6 +379,10 @@ const CFG = {
   <div id="vistaDatos" class="oculto">
     <div class="filtros">
       <div class="grupo-seg" id="segEmpresa" role="group" aria-label="Empresa"></div>
+      <div class="campo">
+        <label id="rotPlantas">Plantas</label>
+        <div class="chips" id="chipsPlanta" role="group" aria-labelledby="rotPlantas"></div>
+      </div>
       <div class="campo">
         <label for="selPeriodo">Periodo</label>
         <select id="selPeriodo">
@@ -431,6 +452,7 @@ const S = {
   metricas:[],           // gráficas con el nombre interno ya resuelto
   colorPlanta:{},        // planta -> color fijo
   periodo:12,            // meses hacia atrás que se representan
+  plantas:new Set(),     // plantas del filtro; vacío = todas
   tablas:false,          // true = ver los datos como tabla
   tocado:{},          // { claveLinea: { campo: valor } }
   guardando:false
@@ -622,20 +644,37 @@ async function resolverLista(){
     if(!etiqueta) return null;
     const e = String(etiqueta).trim().toLowerCase();
     const norm = x => String(x||"").trim().toLowerCase();
-    return (candidatas.find(c => norm(c.displayName) === e)
-         || candidatas.find(c => norm(c.name) === e)
-         || candidatas.find(c => norm(c.displayName).startsWith(e))
-         || candidatas.find(c => norm(c.name).startsWith(e))
-         || {}).name || null;
+    const exacta = candidatas.find(c => norm(c.displayName) === e)
+                || candidatas.find(c => norm(c.name) === e);
+    if(exacta) return exacta.name;
+    // Por prefijo solo si hay una única candidata: "id" no puede quedarse
+    // con "id_planta" porque empiece igual.
+    const porPrefijo = candidatas.filter(c => norm(c.displayName).startsWith(e)
+                                           || norm(c.name).startsWith(e));
+    return porPrefijo.length === 1 ? porPrefijo[0].name : null;
   };
 
+  // El orden importa: las columnas que identifican la fila se reservan
+  // primero y el correlativo solo se queda con lo que sobre.
   S.col = {
     fecha  : buscar(CFG.colFecha),
     planta : buscar(CFG.colPlanta),
     sub    : buscar(CFG.colSubPlanta),
-    empresa: buscar(CFG.colEmpresa),
-    id     : buscar(CFG.colId)
+    empresa: buscar(CFG.colEmpresa)
   };
+  S.avisoColId = "";
+  const idCol = buscar(CFG.colId);
+  const tomadas = Object.values(S.col).filter(Boolean);
+  if(idCol && tomadas.indexOf(idCol) !== -1){
+    // "id" ha caído sobre una columna que ya tiene dueño (por ejemplo
+    // id_planta, por coincidencia de prefijo). Escribir ahí destruiría
+    // el dato: se desactiva el correlativo en lugar de arriesgarlo.
+    S.avisoColId = `La columna "${CFG.colId}" apunta a la misma columna que otro campo `
+      + `de la fila, así que no se rellenará. Revisa CFG.colId o déjalo vacío.`;
+    S.col.id = null;
+  }else{
+    S.col.id = idCol;
+  }
 
   const faltan = ["fecha","planta","empresa"].filter(k => !S.col[k]);
   if(faltan.length){
@@ -662,10 +701,29 @@ async function resolverLista(){
     S.camposNoHallados = [];
   }
 
-  S.metricas = (CFG.graficas || []).map(g => {
-    const n = buscar(g.col);
-    return n ? Object.assign({}, g, {nombre:n}) : null;
-  }).filter(Boolean);
+  // Cada gráfica declara sus columnas por nombre visible; aquí se traducen
+  S.metricas = [];
+  for(const g of (CFG.graficas || [])){
+    const def = JSON.parse(JSON.stringify(g));
+    if(g.col){
+      def._col = buscar(g.col);
+      if(!def._col) continue;
+    }
+    if(g.partes){
+      def.partes = [];
+      for(const pt of g.partes){
+        const n = buscar(pt.col);
+        if(n) def.partes.push(Object.assign({}, pt, {_col:n}));
+      }
+      if(!def.partes.length) continue;
+    }
+    if(g.razon){
+      def.razon._num = buscar(g.razon.num);
+      def.razon._den = buscar(g.razon.den);
+      if(!def.razon._num || !def.razon._den) continue;
+    }
+    S.metricas.push(def);
+  }
 }
 
 // Diagnóstico
@@ -696,6 +754,7 @@ function verColumnas(){
     <p style="margin:6px 0"><strong>Valores de planta:</strong> ${escapar(pla.join(" · ")) || "—"}</p>
     <p style="margin:6px 0"><strong>Valores de sublínea:</strong> ${escapar(sub.join(" · ")) || "—"}</p>
     <p style="margin:6px 0"><strong>Meses con datos:</strong> ${escapar(mes.join(", ")) || "—"}</p>
+    ${S.avisoColId ? `<p style="margin:6px 0;color:#9C0721"><strong>Aviso:</strong> ${escapar(S.avisoColId)}</p>` : ""}
     ${S.camposNoHallados && S.camposNoHallados.length
       ? `<p style="margin:6px 0;color:#9C0721"><strong>Campos no encontrados:</strong> ${escapar(S.camposNoHallados.join(", "))}</p>` : ""}
     <p style="margin:10px 0 4px"><strong>Campos del formulario:</strong>
@@ -919,11 +978,13 @@ async function guardar(){
           {method:"PATCH", body: JSON.stringify(fields)});
         existente.fields = Object.assign({}, existente.fields, r || fields);
       }else{
-        fields[S.col.fecha]     = fechaIso;
-        fields[S.col.planta]    = isNaN(Number(planta)) ? planta : Number(planta);
-        fields[S.col.sub] = sub;
-        fields[S.col.empresa]   = empresa;
         if(S.col.id) fields[S.col.id] = nuevoId++;
+        // Estas cuatro van después a propósito: si por lo que sea
+        // compartieran columna con otra cosa, la fila se identifica bien.
+        fields[S.col.fecha]   = fechaIso;
+        fields[S.col.planta]  = isNaN(Number(planta)) ? planta : Number(planta);
+        if(S.col.sub) fields[S.col.sub] = sub;
+        fields[S.col.empresa] = empresa;
         for(const n of Object.keys(fields)){
           const c = S.cols.find(x => x.name === n);
           if(SISTEMA.includes(n) || (c && c.readOnly)) delete fields[n];
@@ -974,6 +1035,7 @@ const VIZ = {
   margen    : { arriba:14, derecha:66, abajo:26, izquierda:56 },
   rejilla   : "#E2E3E7",
   ejeTexto  : "#7A7573",
+  tinta     : "#3E3938",
   superficie: "#FFFFFF"
 };
 
@@ -989,15 +1051,30 @@ function asignarColores(){
   orden.forEach((pl,i) => { S.colorPlanta[pl] = pool[i % pool.length]; });
 }
 
+// Plantas que existen para la empresa elegida
+function plantasDeEmpresa(){
+  const set = new Set();
+  for(const c of S.combos) if(txt(c.empresa) === txt(S.empresa)) set.add(txt(c.planta));
+  for(const it of S.items){
+    const f = it.fields || {};
+    if(txt(f[S.col.empresa]) === txt(S.empresa)) set.add(txt(f[S.col.planta]));
+  }
+  return [...set].filter(x => x !== "")
+    .sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b));
+}
+function plantasElegidas(){
+  const todas = plantasDeEmpresa();
+  const sel = todas.filter(p => S.plantas.has(p));
+  return sel.length ? sel : todas;     // sin selección = todas
+}
+
 function mesesDelPeriodo(){
   const conDatos = [...new Set(S.items.map(i => mesDeFecha((i.fields||{})[S.col.fecha])))]
     .filter(Boolean).sort();
   if(!conDatos.length) return [];
   const fin = conDatos[conDatos.length-1];
   const n = Number(S.periodo) || 0;
-  if(!n) {                                    // histórico completo, sin huecos
-    return rangoMeses(conDatos[0], fin);
-  }
+  if(!n) return rangoMeses(conDatos[0], fin);
   const [y,m] = fin.split("-").map(Number);
   const d = new Date(Date.UTC(y, m-1-(n-1), 1));
   const ini = `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}`;
@@ -1014,36 +1091,74 @@ function rangoMeses(ini, fin){
   return out;
 }
 
-// Agrega los elementos de la lista para una métrica concreta
-function datosMetrica(met, meses){
-  const porPlanta = new Map();
+// Map planta -> Map mes -> valor, ya filtrado por empresa y plantas elegidas.
+// "suma" une SACOS + BOLSAS; "unico" es un dato del almacén y no se acumula.
+function porPlantaMes(colNombre, agregado, meses){
+  const out = new Map();
+  if(!colNombre) return out;
+  const validas = new Set(plantasElegidas());
   for(const it of S.items){
     const f = it.fields || {};
     if(txt(f[S.col.empresa]) !== txt(S.empresa)) continue;
+    const pl = txt(f[S.col.planta]);
+    if(!validas.has(pl)) continue;
     const mes = mesDeFecha(f[S.col.fecha]);
     if(!mes || meses.indexOf(mes) === -1) continue;
-    const v = Number(f[met.nombre]);
+    const v = Number(f[colNombre]);
     if(!isFinite(v)) continue;
-    const pl = txt(f[S.col.planta]);
-    if(pl === "") continue;
-    if(!porPlanta.has(pl)) porPlanta.set(pl, new Map());
-    const serie = porPlanta.get(pl);
+    if(!out.has(pl)) out.set(pl, new Map());
+    const serie = out.get(pl);
     const previo = serie.get(mes);
-    // "suma" une SACOS + BOLSAS; "unico" es un dato del almacén, no se acumula
     serie.set(mes, previo === undefined ? v
-              : (met.agregado === "suma" ? previo + v : Math.max(previo, v)));
+              : (agregado === "suma" ? previo + v : Math.max(previo, v)));
   }
-  const series = [...porPlanta.keys()]
+  return out;
+}
+
+// Series "una línea por planta"
+function seriesPorPlanta(mapa, meses){
+  return [...mapa.keys()]
     .sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b))
     .map(pl => ({
-      planta : pl,
       nombre : "Planta " + pl,
       color  : S.colorPlanta[pl] || "#7A7573",
-      valores: meses.map(m => { const v = porPlanta.get(pl).get(m);
-                               return v === undefined ? null : v; })
+      valores: meses.map(m => { const v = mapa.get(pl).get(m); return v === undefined ? null : v; })
     }))
     .filter(sr => sr.valores.some(v => v !== null));
-  return series;
+}
+
+function seriesDeGrafica(g, meses){
+  if(g.razon){
+    // Un cociente no se puede sumar entre plantas: se calcula planta a planta
+    const num = porPlantaMes(g.razon._num, g.razon.numAgr, meses);
+    const den = porPlantaMes(g.razon._den, g.razon.denAgr, meses);
+    const series = [];
+    for(const pl of [...num.keys()].sort((a,b) => (Number(a)-Number(b)) || a.localeCompare(b))){
+      const valores = meses.map(m => {
+        const n = num.get(pl).get(m), d = den.has(pl) ? den.get(pl).get(m) : undefined;
+        return (n === undefined || !d) ? null : n/d;   // sin plantilla no hay ratio
+      });
+      if(valores.some(v => v !== null))
+        series.push({nombre:"Planta " + pl, color:S.colorPlanta[pl] || "#7A7573", valores});
+    }
+    return series;
+  }
+  if(g.partes){
+    // Personas: se suman las plantas elegidas para dar el total del filtro
+    return g.partes.map(pt => {
+      const mapa = porPlantaMes(pt._col, g.agregado, meses);
+      const valores = meses.map(m => {
+        let t = null;
+        for(const serie of mapa.values()){
+          const v = serie.get(m);
+          if(v !== undefined) t = (t === null ? 0 : t) + v;
+        }
+        return t;
+      });
+      return {nombre:pt.etiqueta, color:pt.color, valores};
+    }).filter(sr => sr.valores.some(v => v !== null));
+  }
+  return seriesPorPlanta(porPlantaMes(g._col, g.agregado, meses), meses);
 }
 
 function fmt(v, dec){
@@ -1067,36 +1182,27 @@ function escalaY(max){
   for(let v = 0; v <= tope + paso/2; v += paso) pasos.push(Number(v.toFixed(6)));
   return {tope, pasos};
 }
-
 function svgEl(t, attrs){
   const e = document.createElementNS("http://www.w3.org/2000/svg", t);
   for(const k in attrs) e.setAttribute(k, attrs[k]);
   return e;
 }
+// Columna con la cabeza redondeada y el pie a escuadra sobre la línea base
+function caminoColumna(x, y, an, al, r){
+  r = Math.max(0, Math.min(r, an/2, al));
+  return `M${x},${y+al} L${x},${y+r} Q${x},${y} ${x+r},${y} `
+       + `L${x+an-r},${y} Q${x+an},${y} ${x+an},${y+r} L${x+an},${y+al} Z`;
+}
 
-function dibujarGrafica(caja, met, meses, series){
-  caja.innerHTML = "";
-  if(!series.length || !meses.length){
-    caja.innerHTML = `<p class="sin-datos">Todavía no hay datos declarados en este periodo.</p>`;
-    return;
-  }
-
+function baseGrafica(caja, meses, max){
   const an = Math.max(caja.clientWidth || caja.getBoundingClientRect().width || 480, 300);
   const al = VIZ.alto, M = VIZ.margen;
-  const px = an - M.izquierda - M.derecha;      // ancho del área de trazado
+  const px = an - M.izquierda - M.derecha;
   const py = al - M.arriba - M.abajo;
-
-  let max = 0;
-  for(const sr of series) for(const v of sr.valores) if(v !== null && v > max) max = v;
   const esc = escalaY(max);
-  const X = i => meses.length === 1 ? M.izquierda + px/2
-                                    : M.izquierda + (i/(meses.length-1))*px;
+  const svg = svgEl("svg", {viewBox:`0 0 ${an} ${al}`, height:al});
   const Y = v => M.arriba + py - (v/esc.tope)*py;
 
-  const svg = svgEl("svg", {viewBox:`0 0 ${an} ${al}`, height:al,
-                            role:"img", "aria-label":met.etiqueta});
-
-  // --- rejilla y eje Y (hairline continua, un paso por encima del fondo) ---
   for(const v of esc.pasos){
     svg.appendChild(svgEl("line", {x1:M.izquierda, x2:an-M.derecha, y1:Y(v), y2:Y(v),
       stroke:VIZ.rejilla, "stroke-width":1}));
@@ -1105,84 +1211,48 @@ function dibujarGrafica(caja, met, meses, series){
     t.textContent = v.toLocaleString("es-ES");
     svg.appendChild(t);
   }
+  return {an, al, M, px, py, esc, svg, Y};
+}
 
-  // --- eje X: se muestran las etiquetas que caben ---
-  const salto = Math.max(1, Math.ceil(meses.length / Math.max(1, Math.floor(px/56))));
+function ejeX(g, meses, X){
+  const salto = Math.max(1, Math.ceil(meses.length / Math.max(1, Math.floor(g.px/56))));
   const marcas = [];
   meses.forEach((m,i) => { if(i % salto === 0) marcas.push(i); });
   const ultimo = meses.length-1;
   if(marcas[marcas.length-1] !== ultimo){
-    // el último mes siempre se rotula; si el anterior le queda encima, se cae
     if(X(ultimo) - X(marcas[marcas.length-1]) < 52) marcas.pop();
     marcas.push(ultimo);
   }
   for(const i of marcas){
-    const t = svgEl("text", {x:X(i), y:al-8, "text-anchor":"middle",
+    const t = svgEl("text", {x:X(i), y:g.al-8, "text-anchor":"middle",
       "font-size":11, fill:VIZ.ejeTexto});
     t.textContent = mesCorto(meses[i]);
-    svg.appendChild(t);
+    g.svg.appendChild(t);
   }
+}
 
-  // --- líneas de 2px, con hueco allí donde no hay dato ---
-  for(const sr of series){
-    let tramo = [];
-    const cerrar = () => {
-      if(tramo.length === 1){
-        svg.appendChild(svgEl("circle", {cx:tramo[0][0], cy:tramo[0][1], r:3.5,
-          fill:sr.color}));
-      }else if(tramo.length > 1){
-        svg.appendChild(svgEl("path", {d:"M"+tramo.map(pt => pt.join(" ")).join("L"),
-          fill:"none", stroke:sr.color, "stroke-width":2,
-          "stroke-linejoin":"round", "stroke-linecap":"round"}));
-      }
-      tramo = [];
-    };
-    sr.valores.forEach((v,i) => { if(v === null) cerrar(); else tramo.push([X(i), Y(v)]); });
-    cerrar();
-  }
-
-  // --- punto final con anillo de 2px en color de fondo ---
-  const finales = [];
-  for(const sr of series){
-    let ult = -1;
-    sr.valores.forEach((v,i) => { if(v !== null) ult = i; });
-    if(ult === -1) continue;
-    const cx = X(ult), cy = Y(sr.valores[ult]);
-    svg.appendChild(svgEl("circle", {cx, cy, r:4.5, fill:sr.color,
-      stroke:VIZ.superficie, "stroke-width":2}));
-    finales.push({sr, cx, cy, valor:sr.valores[ult]});
-  }
-
-  // --- etiqueta al final de cada línea, separada si se solapa ---
-  finales.sort((a,b) => a.cy - b.cy);
-  let previo = -Infinity;
-  for(const f of finales){
-    const y = Math.max(f.cy, previo + 14);
-    previo = y;
-    if(Math.abs(y - f.cy) > 2){   // línea guía cuando la etiqueta se ha movido
-      svg.appendChild(svgEl("line", {x1:f.cx+5, y1:f.cy, x2:f.cx+11, y2:y-3,
-        stroke:VIZ.rejilla, "stroke-width":1}));
-    }
-    const t = svgEl("text", {x:f.cx+11, y:y+3.5, "font-size":11.5,
-      "font-weight":600, fill:"#3E3938", "font-variant-numeric":"tabular-nums"});
-    t.textContent = fmt(f.valor, met.decimales);
-    svg.appendChild(t);
-  }
-
-  // --- capa de exploración: retícula y globo con todas las series ---
-  const reticula = svgEl("line", {y1:M.arriba, y2:M.arriba+py, stroke:"#B9BBC1",
-    "stroke-width":1, opacity:0});
-  svg.appendChild(reticula);
-  const focos = series.map(sr => {
+// Capa de exploración compartida: retícula, globo con todas las series y teclado
+// banda: ancho de la franja de mes a resaltar (columnas).
+// Sin banda se usa una retícula fina, que es lo que pide una gráfica de líneas.
+function capaExploracion(caja, g, meses, series, dec, X, posFoco, banda){
+  const reticula = banda
+    ? svgEl("rect", {y:g.M.arriba, height:g.py, width:banda, fill:"#3E3938",
+        opacity:0, "pointer-events":"none"})
+    : svgEl("line", {y1:g.M.arriba, y2:g.M.arriba+g.py, stroke:"#B9BBC1",
+        "stroke-width":1, opacity:0});
+  // el resalte va por debajo de las columnas; la retícula, por encima
+  if(banda) g.svg.insertBefore(reticula, g.svg.firstChild);
+  else g.svg.appendChild(reticula);
+  const focos = posFoco ? series.map(sr => {
     const c = svgEl("circle", {r:4.5, fill:sr.color, stroke:VIZ.superficie,
       "stroke-width":2, opacity:0});
-    svg.appendChild(c); return c;
-  });
-  const zona = svgEl("rect", {x:M.izquierda, y:M.arriba, width:px, height:py,
+    g.svg.appendChild(c); return c;
+  }) : [];
+  const zona = svgEl("rect", {x:g.M.izquierda, y:g.M.arriba, width:g.px, height:g.py,
     fill:"transparent", tabindex:0, role:"application",
-    "aria-label":met.etiqueta + ". Use las flechas para recorrer los meses."});
-  svg.appendChild(zona);
-  caja.appendChild(svg);
+    "aria-label":"Use las flechas para recorrer los meses."});
+  g.svg.appendChild(zona);
+  caja.appendChild(g.svg);
 
   const globo = document.createElement("div");
   globo.className = "globo oculto";
@@ -1192,37 +1262,37 @@ function dibujarGrafica(caja, met, meses, series){
   function situar(i){
     if(i < 0 || i >= meses.length) return;
     idx = i;
-    reticula.setAttribute("x1", X(i)); reticula.setAttribute("x2", X(i));
-    reticula.setAttribute("opacity", 1);
-
+    if(banda){
+      reticula.setAttribute("x", X(i) - banda/2);
+      reticula.setAttribute("opacity", 0.06);
+    }else{
+      reticula.setAttribute("x1", X(i)); reticula.setAttribute("x2", X(i));
+      reticula.setAttribute("opacity", 1);
+    }
     globo.innerHTML = "";
     const cab = document.createElement("div");
-    cab.className = "cab";
-    cab.textContent = nombreMes(meses[i]);
+    cab.className = "cab"; cab.textContent = nombreMes(meses[i]);
     globo.appendChild(cab);
-
     series.forEach((sr,j) => {
       const v = sr.valores[i];
-      focos[j].setAttribute("opacity", v === null ? 0 : 1);
-      if(v !== null){ focos[j].setAttribute("cx", X(i)); focos[j].setAttribute("cy", Y(v)); }
+      if(focos[j]){
+        focos[j].setAttribute("opacity", v === null ? 0 : 1);
+        if(v !== null){ focos[j].setAttribute("cx", X(i)); focos[j].setAttribute("cy", g.Y(v)); }
+      }
       const fila = document.createElement("div");
       fila.className = "fila";
-      const llave = document.createElement("i");
-      llave.style.background = sr.color;
-      const nom = document.createElement("em");
-      nom.textContent = sr.nombre;
-      const val = document.createElement("b");
-      val.textContent = fmt(v, met.decimales);
+      const llave = document.createElement("i"); llave.style.background = sr.color;
+      const nom = document.createElement("em"); nom.textContent = sr.nombre;
+      const val = document.createElement("b"); val.textContent = fmt(v, dec);
       fila.appendChild(llave); fila.appendChild(nom); fila.appendChild(val);
       globo.appendChild(fila);
     });
-
     globo.classList.remove("oculto");
     const ancho = globo.offsetWidth || 150;
     let gx = X(i) + 14;
-    if(gx + ancho > an) gx = X(i) - ancho - 14;
+    if(gx + ancho > g.an) gx = X(i) - ancho - 14;
     globo.style.left = Math.max(4, gx) + "px";
-    globo.style.top  = (M.arriba + 4) + "px";
+    globo.style.top  = (g.M.arriba + 4) + "px";
   }
   function ocultar(){
     reticula.setAttribute("opacity", 0);
@@ -1230,11 +1300,11 @@ function dibujarGrafica(caja, met, meses, series){
     globo.classList.add("oculto");
   }
   function desdeX(clientX){
-    const r = svg.getBoundingClientRect();
-    const rel = (clientX - r.left) * (an / r.width);
+    const r = g.svg.getBoundingClientRect();
+    const rel = (clientX - r.left) * (g.an / r.width);
     if(meses.length === 1) return 0;
     return Math.max(0, Math.min(meses.length-1,
-      Math.round(((rel - M.izquierda) / px) * (meses.length-1))));
+      Math.round(((rel - g.M.izquierda) / g.px) * (meses.length-1))));
   }
   zona.addEventListener("pointermove", e => situar(desdeX(e.clientX)));
   zona.addEventListener("pointerleave", ocultar);
@@ -1247,18 +1317,105 @@ function dibujarGrafica(caja, met, meses, series){
   });
 }
 
-function tablaDe(met, meses, series){
+function dibujarLineas(caja, def, meses, series){
+  let max = 0;
+  for(const sr of series) for(const v of sr.valores) if(v !== null && v > max) max = v;
+  const g = baseGrafica(caja, meses, max);
+  const X = i => meses.length === 1 ? g.M.izquierda + g.px/2
+                                    : g.M.izquierda + (i/(meses.length-1))*g.px;
+  ejeX(g, meses, X);
+
+  for(const sr of series){
+    let tramo = [];
+    const cerrar = () => {
+      if(tramo.length === 1)
+        g.svg.appendChild(svgEl("circle", {cx:tramo[0][0], cy:tramo[0][1], r:3.5, fill:sr.color}));
+      else if(tramo.length > 1)
+        g.svg.appendChild(svgEl("path", {d:"M"+tramo.map(pt => pt.join(" ")).join("L"),
+          fill:"none", stroke:sr.color, "stroke-width":2,
+          "stroke-linejoin":"round", "stroke-linecap":"round"}));
+      tramo = [];
+    };
+    sr.valores.forEach((v,i) => { if(v === null) cerrar(); else tramo.push([X(i), g.Y(v)]); });
+    cerrar();
+  }
+
+  const finales = [];
+  for(const sr of series){
+    let ult = -1;
+    sr.valores.forEach((v,i) => { if(v !== null) ult = i; });
+    if(ult === -1) continue;
+    const cx = X(ult), cy = g.Y(sr.valores[ult]);
+    g.svg.appendChild(svgEl("circle", {cx, cy, r:4.5, fill:sr.color,
+      stroke:VIZ.superficie, "stroke-width":2}));
+    finales.push({cx, cy, valor:sr.valores[ult]});
+  }
+  finales.sort((a,b) => a.cy - b.cy);
+  let previo = -Infinity;
+  for(const f of finales){
+    const y = Math.max(f.cy, previo + 14); previo = y;
+    if(Math.abs(y - f.cy) > 2)
+      g.svg.appendChild(svgEl("line", {x1:f.cx+5, y1:f.cy, x2:f.cx+11, y2:y-3,
+        stroke:VIZ.rejilla, "stroke-width":1}));
+    const t = svgEl("text", {x:f.cx+11, y:y+3.5, "font-size":11.5, "font-weight":600,
+      fill:VIZ.tinta, "font-variant-numeric":"tabular-nums"});
+    t.textContent = fmt(f.valor, def.decimales);
+    g.svg.appendChild(t);
+  }
+  capaExploracion(caja, g, meses, series, def.decimales, X, true);
+}
+
+function dibujarColumnas(caja, def, meses, series){
+  let max = 0;
+  for(const sr of series) for(const v of sr.valores) if(v !== null && v > max) max = v;
+  const g = baseGrafica(caja, meses, max);
+  const banda = g.px / meses.length;
+  const X = i => g.M.izquierda + banda*(i + 0.5);
+  ejeX(g, meses, X);
+
+  const HUECO = 2;                                   // el hueco separa, no un borde
+  const anchoCol = Math.max(3, Math.min(24, (banda*0.68 - HUECO*(series.length-1)) / series.length));
+  const anchoGrupo = anchoCol*series.length + HUECO*(series.length-1);
+
+  meses.forEach((m,i) => {
+    const x0 = X(i) - anchoGrupo/2;
+    series.forEach((sr,j) => {
+      const v = sr.valores[i];
+      if(v === null || v <= 0) return;
+      const y = g.Y(v), alto = g.M.arriba + g.py - y;
+      g.svg.appendChild(svgEl("path", {
+        d: caminoColumna(x0 + j*(anchoCol+HUECO), y, anchoCol, alto, 4),
+        fill: sr.color }));
+    });
+  });
+
+  // Solo se rotula el último mes; el resto lo llevan el eje, el globo y la tabla
+  const ult = meses.length-1;
+  let previo = -Infinity;
+  series.map((sr,j) => ({sr, j, v:sr.valores[ult]}))
+    .filter(o => o.v !== null)
+    .sort((a,b) => g.Y(a.v) - g.Y(b.v))   // de arriba abajo, para separarlas hacia abajo
+    .forEach(o => {
+      const y = Math.max(g.Y(o.v), previo + 14); previo = y;
+      const t = svgEl("text", {x:X(ult) + anchoGrupo/2 + 8, y:y+4, "font-size":11.5,
+        "font-weight":600, fill:VIZ.tinta, "font-variant-numeric":"tabular-nums"});
+      t.textContent = fmt(o.v, def.decimales);
+      g.svg.appendChild(t);
+    });
+
+  capaExploracion(caja, g, meses, series, def.decimales, X, false, banda);
+}
+
+function tablaDe(def, meses, series){
   const t = document.createElement("table");
   t.className = "tabla-datos";
-  const thead = document.createElement("thead");
-  const trh = document.createElement("tr");
+  const thead = document.createElement("thead"), trh = document.createElement("tr");
   const th0 = document.createElement("th"); th0.textContent = "Mes"; trh.appendChild(th0);
   for(const sr of series){
     const th = document.createElement("th");
     const k = document.createElement("span");
     k.className = "llave"; k.style.background = sr.color;
-    th.appendChild(k);
-    th.appendChild(document.createTextNode(sr.nombre));
+    th.appendChild(k); th.appendChild(document.createTextNode(sr.nombre));
     trh.appendChild(th);
   }
   thead.appendChild(trh); t.appendChild(thead);
@@ -1268,7 +1425,7 @@ function tablaDe(met, meses, series){
     const td0 = document.createElement("td"); td0.textContent = nombreMes(m); tr.appendChild(td0);
     for(const sr of series){
       const td = document.createElement("td");
-      td.textContent = fmt(sr.valores[i], met.decimales);
+      td.textContent = fmt(sr.valores[i], def.decimales);
       tr.appendChild(td);
     }
     tb.appendChild(tr);
@@ -1280,7 +1437,6 @@ function tablaDe(met, meses, series){
 function pintarDatos(){
   const cont = $("graficas");
   cont.innerHTML = "";
-
   if(!S.metricas.length){
     cont.innerHTML = `<p class="sin-datos">No se han podido resolver las columnas de las gráficas.</p>`;
     return;
@@ -1288,49 +1444,90 @@ function pintarDatos(){
   const meses = mesesDelPeriodo();
   const pendientes = [];
 
-  for(const met of S.metricas){
-    const series = datosMetrica(met, meses);
+  for(const def of S.metricas){
+    const series = seriesDeGrafica(def, meses);
 
     const card = document.createElement("article");
     card.className = "tarjeta";
-
-    const h = document.createElement("h3"); h.textContent = met.etiqueta;
-    const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = met.nota || "";
+    const h = document.createElement("h3"); h.textContent = def.etiqueta;
+    const sub = document.createElement("p"); sub.className = "sub"; sub.textContent = def.nota || "";
     card.appendChild(h); card.appendChild(sub);
 
-    // La leyenda acompaña siempre a dos o más series
-    if(series.length > 1){
+    if(series.length > 1){          // la leyenda acompaña siempre a dos o más series
       const leg = document.createElement("div");
       leg.className = "leyenda";
       for(const sr of series){
         const sp = document.createElement("span");
-        const i = document.createElement("i"); i.style.background = sr.color;
+        const i = document.createElement("i");
+        i.style.background = sr.color;
+        if(def.forma === "columnas") i.classList.add("caja");
         sp.appendChild(i); sp.appendChild(document.createTextNode(sr.nombre));
         leg.appendChild(sp);
       }
       card.appendChild(leg);
     }
 
-    if(S.tablas){
-      if(series.length) card.appendChild(tablaDe(met, meses, series));
-      else{
-        const p = document.createElement("p");
-        p.className = "sin-datos";
-        p.textContent = "Todavía no hay datos declarados en este periodo.";
-        card.appendChild(p);
-      }
+    if(!series.length || !meses.length){
+      const p = document.createElement("p");
+      p.className = "sin-datos";
+      p.textContent = "Todavía no hay datos declarados en este periodo.";
+      card.appendChild(p);
+    }else if(S.tablas){
+      card.appendChild(tablaDe(def, meses, series));
     }else{
       const caja = document.createElement("div");
       caja.className = "lienzo";
       card.appendChild(caja);
-      pendientes.push({caja, met, series});
+      pendientes.push({caja, def, series});
     }
     cont.appendChild(card);
   }
 
   // Se dibuja al final: cada lienzo necesita el ancho que le deja
   // la rejilla ya completa, no el que tenía con media parrilla montada.
-  for(const t of pendientes) dibujarGrafica(t.caja, t.met, meses, t.series);
+  for(const t of pendientes){
+    if(t.def.forma === "columnas") dibujarColumnas(t.caja, t.def, meses, t.series);
+    else dibujarLineas(t.caja, t.def, meses, t.series);
+  }
+}
+
+function pintarFiltros(){
+  const ce = $("segEmpresa");
+  ce.innerHTML = "";
+  for(const e of CFG.empresas){
+    const b = document.createElement("button");
+    b.textContent = e;
+    b.setAttribute("aria-pressed", String(txt(e) === txt(S.empresa)));
+    b.addEventListener("click", () => {
+      S.empresa = e;
+      $("selEmpresa").value = e;
+      S.plantas = new Set();            // las plantas cambian con la empresa
+      pintarFiltros(); pintarDatos();
+    });
+    ce.appendChild(b);
+  }
+
+  const cp = $("chipsPlanta");
+  cp.innerHTML = "";
+  const todas = plantasDeEmpresa();
+  const bt = document.createElement("button");
+  bt.textContent = "Todas";
+  bt.setAttribute("aria-pressed", String(S.plantas.size === 0));
+  bt.addEventListener("click", () => { S.plantas = new Set(); pintarFiltros(); pintarDatos(); });
+  cp.appendChild(bt);
+  for(const pl of todas){
+    const b = document.createElement("button");
+    const punto = document.createElement("i");
+    punto.style.background = S.colorPlanta[pl] || "#7A7573";
+    b.appendChild(punto);
+    b.appendChild(document.createTextNode("Planta " + pl));
+    b.setAttribute("aria-pressed", String(S.plantas.has(pl)));
+    b.addEventListener("click", () => {
+      if(S.plantas.has(pl)) S.plantas.delete(pl); else S.plantas.add(pl);
+      pintarFiltros(); pintarDatos();
+    });
+    cp.appendChild(b);
+  }
 }
 
 function cambiarVista(v){
@@ -1346,25 +1543,8 @@ function cambiarVista(v){
   limpiarAvisos();
   // Las dos vistas comparten el filtro de empresa, así que la que se
   // muestra se repinta para no quedarse con la empresa anterior.
-  if(enDatos){ pintarSegEmpresa(); pintarDatos(); }
+  if(enDatos){ pintarFiltros(); pintarDatos(); }
   else{ $("selEmpresa").value = S.empresa; pintar(); }
-}
-
-function pintarSegEmpresa(){
-  const cont = $("segEmpresa");
-  cont.innerHTML = "";
-  for(const e of CFG.empresas){
-    const b = document.createElement("button");
-    b.textContent = e;
-    b.setAttribute("aria-pressed", String(txt(e) === txt(S.empresa)));
-    b.addEventListener("click", () => {
-      S.empresa = e;
-      $("selEmpresa").value = e;
-      pintarSegEmpresa();
-      pintarDatos();
-    });
-    cont.appendChild(b);
-  }
 }
 
 let temporizadorAncho = null;
@@ -1381,6 +1561,7 @@ async function arrancar(){
   $("pestanas").classList.remove("oculto");
   $("app").classList.remove("oculto");
   $("usuario").textContent = S.cuenta.name || S.cuenta.username;
+  $("version").textContent = "v" + CFG.version;
 
   S.mes = mesAnterior();
   S.empresa = CFG.empresas[0];
@@ -1402,6 +1583,7 @@ async function arrancar(){
     }
     asignarColores();
     pintar();
+    if(S.avisoColId) aviso(S.avisoColId, "info");
   }catch(e){
     $("contenido").innerHTML = "";
     aviso("No se ha podido cargar la lista. " + e.message, "mal");
@@ -1433,7 +1615,7 @@ $("btnSalir").addEventListener("click", () => S.msal.logoutRedirect({
 }));
 $("selMes").addEventListener("change", cambiarMes);
 $("selEmpresa").addEventListener("change", () => {
-  S.empresa = $("selEmpresa").value; limpiarAvisos(); pintar();
+  S.empresa = $("selEmpresa").value; S.plantas = new Set(); limpiarAvisos(); pintar();
 });
 $("tabRegistro").addEventListener("click", () => cambiarVista("registro"));
 $("tabDatos").addEventListener("click", () => cambiarVista("datos"));
